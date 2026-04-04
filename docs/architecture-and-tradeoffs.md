@@ -101,7 +101,7 @@ Built-in packs replace the blank-slate onboarding problem. Instead of `ready ini
 - **starter** — 11 universal checks (docs, CI, testing, secrets, ops basics)
 - **web-api** — 17 API-specific checks (auth, rate limiting, error handling, logging, resilience)
 - **security-baseline** — 8 security checks (hardcoded secrets, private keys, .env files, lock file, SECURITY.md)
-- **observability-baseline** — 8 observability checks (logging, tracing, metrics, dashboards, on-call)
+- **telemetry** — 8 telemetry checks (logging, tracing, metrics, dashboards, on-call)
 
 **Why:** A thin starter pack means every team builds their checkpoint library from scratch. Curated packs give teams a working baseline in seconds, with the right checks for their context. The first scan produces a meaningful score rather than a placeholder.
 

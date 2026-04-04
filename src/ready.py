@@ -55,9 +55,9 @@ PACKS = {
         "security-baseline",
         "Security baseline — hardcoded secrets, dependency hygiene, .gitignore, and security policy",
     ),
-    "observability-baseline": (
-        "observability-baseline",
-        "Observability baseline — logging, tracing, metrics, dashboards, and on-call registration",
+    "telemetry": (
+        "telemetry",
+        "Telemetry — logging, tracing, metrics, dashboards, and on-call registration",
     ),
 }
 
@@ -1160,7 +1160,7 @@ def main():
         type=str,
         default="starter",
         metavar="NAME",
-        help="Checkpoint pack: starter, web-api, security-baseline, observability-baseline (default: starter)",
+        help="Checkpoint pack: starter, web-api, security-baseline, telemetry (default: starter)",
     )
     init_parser.add_argument(
         "--list-packs",

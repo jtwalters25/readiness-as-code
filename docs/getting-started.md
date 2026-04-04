@@ -38,7 +38,7 @@ When you're ready to commit your configuration, initialize a `.readiness/` direc
 ready init                              # Universal starter (default)
 ready init --pack web-api               # REST/HTTP API checks
 ready init --pack security-baseline     # Secrets, dependency hygiene, security policy
-ready init --pack observability-baseline # Logging, tracing, metrics, dashboards
+ready init --pack telemetry # Logging, tracing, metrics, dashboards
 ready init --list-packs                 # Show all available packs
 ```
 

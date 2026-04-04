@@ -135,7 +135,7 @@ Start with a curated pack, then customize:
 ready init                              # Universal starter (default)
 ready init --pack web-api               # REST/HTTP API checks
 ready init --pack security-baseline     # Secrets, dependency hygiene, security policy
-ready init --pack observability-baseline # Logging, tracing, metrics, dashboards
+ready init --pack telemetry # Logging, tracing, metrics, dashboards
 ready init --list-packs                 # Show all available packs
 ```
 
@@ -144,7 +144,7 @@ ready init --list-packs                 # Show all available packs
 | `starter` | 11 universal | Any repo |
 | `web-api` | 17 API-specific | REST/HTTP services |
 | `security-baseline` | 8 security | Any repo with sensitive data |
-| `observability-baseline` | 8 observability | Production services |
+| `telemetry` | 8 telemetry | Production services |
 
 ## Key Capabilities
 
