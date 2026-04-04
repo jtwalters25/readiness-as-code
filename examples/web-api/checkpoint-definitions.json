@@ -1,0 +1,305 @@
+{
+  "version": "1.0",
+  "metadata": {
+    "guideline_name": "Web API Production Readiness",
+    "guideline_version": "1.0",
+    "last_updated": "2026-04-01",
+    "author": "readiness-as-code web-api pack"
+  },
+  "checkpoints": [
+    {
+      "id": "api-001",
+      "title": "Health check endpoint",
+      "description": "Service must expose a health endpoint for liveness/readiness probes.",
+      "guideline": "Web API Production Readiness",
+      "guideline_section": "1.1 — Health Monitoring",
+      "severity": "red",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "(\\/health[\"'`z/]|healthcheck|health_check|\\/readyz|\\/livez)",
+        "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**,server/**,api/**}/*.{py,js,ts,go,cs,java,rb}",
+        "min_matches": 1,
+        "confidence": "likely"
+      },
+      "applicable_tags": ["web-api"],
+      "fix_hint": "Add a /health endpoint that returns HTTP 200 when the service is operational and 503 when degraded."
+    },
+    {
+      "id": "api-002",
+      "title": "Authentication middleware",
+      "description": "All API endpoints must be protected by authentication (JWT, OAuth, API key, or equivalent).",
+      "guideline": "Web API Production Readiness",
+      "guideline_section": "2.1 — Authentication",
+      "severity": "red",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "(auth.*middleware|jwt\\.verify|passport\\.authenticate|@requires_auth|\\[Authorize\\]|AuthenticationMiddleware|oauth2|bearer.*token|api.key.*validation)",
+        "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**,server/**,api/**}/*.{py,js,ts,go,cs,java}",
+        "min_matches": 1,
+        "confidence": "likely"
+      },
+      "applicable_tags": ["web-api"],
+      "fix_hint": "Add authentication middleware to your API. Options: JWT validation, OAuth2, API key validation, or your org's auth SDK."
+    },
+    {
+      "id": "api-003",
+      "title": "Rate limiting configured",
+      "description": "API should have rate limiting to prevent abuse and protect backend resources.",
+      "guideline": "Web API Production Readiness",
+      "guideline_section": "2.2 — Traffic Management",
+      "severity": "yellow",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "(rate.limit|throttl|RateLimiter|slowdown|express-rate-limit|aspnetcore.*ratelimit|golang\\.org.*rate)",
+        "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**,server/**,api/**}/*.{py,js,ts,go,cs,java}",
+        "min_matches": 1,
+        "confidence": "likely"
+      },
+      "applicable_tags": ["web-api"],
+      "fix_hint": "Add rate limiting middleware. Consider per-client and global limits."
+    },
+    {
+      "id": "api-004",
+      "title": "Request validation",
+      "description": "API inputs must be validated before processing.",
+      "guideline": "Web API Production Readiness",
+      "guideline_section": "2.3 — Input Validation",
+      "severity": "yellow",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "(validate|validator|joi\\.|zod\\.|pydantic|marshmallow|FluentValidation|\\[Required\\]|@Valid|binding:\".required\")",
+        "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**,server/**,api/**}/*.{py,js,ts,go,cs,java}",
+        "min_matches": 1,
+        "confidence": "likely"
+      },
+      "applicable_tags": ["web-api"],
+      "fix_hint": "Add request validation using a schema library (Pydantic, Zod, Joi, FluentValidation, etc.)."
+    },
+    {
+      "id": "api-005",
+      "title": "Structured error responses",
+      "description": "API must return consistent, structured error responses (not stack traces).",
+      "guideline": "Web API Production Readiness",
+      "guideline_section": "3.1 — Error Handling",
+      "severity": "red",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "(error.handler|exception.handler|error.middleware|global.*exception|@ControllerAdvice|ExceptionFilter|ErrorBoundary|app\\.use.*err)",
+        "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**,server/**,api/**}/*.{py,js,ts,go,cs,java}",
+        "min_matches": 1,
+        "confidence": "likely"
+      },
+      "applicable_tags": ["web-api"],
+      "fix_hint": "Add centralized error handling that catches unhandled exceptions and returns structured JSON error responses, not raw stack traces."
+    },
+    {
+      "id": "api-006",
+      "title": "Structured logging",
+      "description": "Service must use structured logging (JSON format preferred) for queryable log analysis.",
+      "guideline": "Web API Production Readiness",
+      "guideline_section": "4.1 — Observability",
+      "severity": "red",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "(structlog|json.*log|winston|pino|serilog|log4j|zap\\.New|slog\\.New|logrus\\.New|bunyan)",
+        "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**,server/**,api/**}/*.{py,js,ts,go,cs,java}",
+        "min_matches": 1,
+        "confidence": "likely"
+      },
+      "applicable_tags": ["web-api"],
+      "fix_hint": "Configure a structured logging library. Recommended: Python structlog, Node pino/winston, .NET Serilog, Go zap/slog."
+    },
+    {
+      "id": "api-007",
+      "title": "Request tracing / correlation IDs",
+      "description": "Service should propagate correlation or trace IDs for distributed request tracing.",
+      "guideline": "Web API Production Readiness",
+      "guideline_section": "4.2 — Distributed Tracing",
+      "severity": "yellow",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "(correlation.id|trace.id|request.id|x-request-id|opentelemetry|tracing|W3CTraceContext|traceparent)",
+        "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**,server/**,api/**}/*.{py,js,ts,go,cs,java,yaml,yml}",
+        "min_matches": 1,
+        "confidence": "likely"
+      },
+      "applicable_tags": ["web-api"],
+      "fix_hint": "Add request/correlation ID middleware and propagate trace context (OpenTelemetry recommended)."
+    },
+    {
+      "id": "api-008",
+      "title": "Graceful shutdown handling",
+      "description": "Service must handle SIGTERM gracefully — drain connections, finish in-flight requests, then exit.",
+      "guideline": "Web API Production Readiness",
+      "guideline_section": "5.1 — Lifecycle Management",
+      "severity": "red",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "(SIGTERM|graceful.*shut|shutdown.*signal|signal\\.Notify|process\\.on.*SIGTERM|lifetime\\.ApplicationStopping|server\\.Shutdown)",
+        "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**,server/**,api/**}/*.{py,js,ts,go,cs,java}",
+        "min_matches": 1,
+        "confidence": "likely"
+      },
+      "applicable_tags": ["web-api"],
+      "fix_hint": "Handle SIGTERM: stop accepting new connections, wait for in-flight requests to complete (with a timeout), then exit cleanly."
+    },
+    {
+      "id": "api-009",
+      "title": "Dockerfile present",
+      "description": "Service must have a Dockerfile for consistent, reproducible deployments.",
+      "guideline": "Web API Production Readiness",
+      "guideline_section": "5.2 — Containerization",
+      "severity": "red",
+      "type": "code",
+      "verification": {
+        "method": "glob",
+        "pattern": "{Dockerfile,*.dockerfile}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["web-api"],
+      "fix_hint": "Add a Dockerfile. Use a multi-stage build for smaller images."
+    },
+    {
+      "id": "api-010",
+      "title": "API documentation",
+      "description": "API endpoints must be documented (OpenAPI/Swagger, AsyncAPI, or equivalent).",
+      "guideline": "Web API Production Readiness",
+      "guideline_section": "6.1 — Documentation",
+      "severity": "yellow",
+      "type": "code",
+      "verification": {
+        "method": "glob",
+        "pattern": "{openapi.yaml,openapi.json,openapi.yml,swagger.yaml,swagger.json,**/openapi.*,**/swagger.*,docs/api.*}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["web-api"],
+      "fix_hint": "Add an OpenAPI/Swagger spec documenting your API endpoints, request/response schemas, and authentication."
+    },
+    {
+      "id": "api-011",
+      "title": "Timeout configuration",
+      "description": "HTTP client calls and database queries must have explicit timeouts to prevent resource exhaustion.",
+      "guideline": "Web API Production Readiness",
+      "guideline_section": "3.2 — Resilience",
+      "severity": "yellow",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "(timeout|Timeout|time.out|request_timeout|connect_timeout|read_timeout|context\\.WithTimeout|CancellationToken)",
+        "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**,server/**,api/**}/*.{py,js,ts,go,cs,java}",
+        "min_matches": 1,
+        "confidence": "likely"
+      },
+      "applicable_tags": ["web-api"],
+      "fix_hint": "Set explicit timeouts on all HTTP client calls and database connections. Never rely on default (infinite) timeouts."
+    },
+    {
+      "id": "api-012",
+      "title": "Retry policy for downstream calls",
+      "description": "Calls to downstream services should have retry logic with backoff.",
+      "guideline": "Web API Production Readiness",
+      "guideline_section": "3.3 — Resilience",
+      "severity": "yellow",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "(retry|Retry|Polly|tenacity|backoff|exponential.*back|circuit.breaker|resilience4j)",
+        "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**,server/**,api/**}/*.{py,js,ts,go,cs,java}",
+        "min_matches": 1,
+        "confidence": "likely"
+      },
+      "applicable_tags": ["web-api"],
+      "fix_hint": "Add retry logic with exponential backoff for calls to downstream services. Libraries: Polly (.NET), tenacity (Python), resilience4j (Java)."
+    },
+    {
+      "id": "api-ext-001",
+      "title": "Monitoring dashboard",
+      "description": "Service must have a production monitoring dashboard showing RED metrics (Request rate, Error rate, Duration/latency) and saturation.",
+      "guideline": "Web API Production Readiness",
+      "guideline_section": "4.3 — Monitoring",
+      "severity": "red",
+      "type": "external",
+      "verification": {
+        "method": "external_attestation",
+        "attestation_key": "monitoring_dashboard"
+      },
+      "applicable_tags": ["web-api"],
+      "fix_hint": "Create a monitoring dashboard with panels for: request rate, error rate, P50/P95/P99 latency, and resource saturation. Attest in .readiness/external-evidence.json with the dashboard URL."
+    },
+    {
+      "id": "api-ext-002",
+      "title": "Alerting configured",
+      "description": "Critical service metrics must have alert rules that page on-call when breached.",
+      "guideline": "Web API Production Readiness",
+      "guideline_section": "4.4 — Alerting",
+      "severity": "red",
+      "type": "external",
+      "verification": {
+        "method": "external_attestation",
+        "attestation_key": "alerting_configured"
+      },
+      "applicable_tags": ["web-api"],
+      "fix_hint": "Configure alerts for: error rate spike, latency degradation, and health check failure. Link to alert configuration in .readiness/external-evidence.json"
+    },
+    {
+      "id": "api-ext-003",
+      "title": "On-call rotation registered",
+      "description": "Service must be registered in incident management with an active on-call rotation.",
+      "guideline": "Web API Production Readiness",
+      "guideline_section": "4.5 — Incident Management",
+      "severity": "red",
+      "type": "external",
+      "verification": {
+        "method": "external_attestation",
+        "attestation_key": "oncall_registration"
+      },
+      "applicable_tags": ["web-api"],
+      "fix_hint": "Register your service in PagerDuty/OpsGenie/ICM with an on-call rotation. Attest in .readiness/external-evidence.json"
+    },
+    {
+      "id": "api-ext-004",
+      "title": "Runbook documented",
+      "description": "Service must have a runbook covering common failure scenarios, debugging steps, and escalation paths.",
+      "guideline": "Web API Production Readiness",
+      "guideline_section": "6.2 — Operational Documentation",
+      "severity": "yellow",
+      "type": "external",
+      "verification": {
+        "method": "external_attestation",
+        "attestation_key": "runbook"
+      },
+      "applicable_tags": ["web-api"],
+      "fix_hint": "Write a runbook covering: common alerts and what to do, how to restart/rollback, dependency health checks, and escalation contacts. Attest in .readiness/external-evidence.json"
+    },
+    {
+      "id": "api-hyb-001",
+      "title": "Observability SDK and backend",
+      "description": "Service must have an observability SDK wired in code AND the monitoring backend must be configured to receive telemetry.",
+      "guideline": "Web API Production Readiness",
+      "guideline_section": "4.1 — Observability",
+      "severity": "red",
+      "type": "hybrid",
+      "verification": {
+        "method": "hybrid",
+        "code_verification": {
+          "method": "grep",
+          "pattern": "(opentelemetry|applicationinsights|datadog\\.trace|newrelic|prometheus_client|micrometer|honeycomb)",
+          "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**,server/**,api/**}/*.{py,js,ts,go,cs,java}",
+          "min_matches": 1,
+          "confidence": "likely"
+        },
+        "attestation_key": "observability_backend"
+      },
+      "applicable_tags": ["web-api"],
+      "fix_hint": "1) Install an observability SDK (OpenTelemetry recommended) and configure trace/metric export. 2) Verify the backend is receiving data and attest in .readiness/external-evidence.json"
+    }
+  ]
+}

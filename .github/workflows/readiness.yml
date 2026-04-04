@@ -1,0 +1,42 @@
+# readiness-as-code — GitHub Actions template
+#
+# Copy this into your repo at .github/workflows/readiness.yml
+# Runs readiness scan on PRs (gating) and weekly (monitoring).
+
+name: Readiness Check
+
+on:
+  pull_request:
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+  schedule:
+    # Weekly Monday 8am UTC
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+jobs:
+  readiness-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install readiness-as-code
+        run: pip install readiness-as-code
+
+      - name: Run readiness scan
+        run: ready scan --verbose --baseline .readiness/review-baseline.json
+
+      - name: Upload baseline artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: readiness-baseline
+          path: .readiness/review-baseline.json
+          retention-days: 90

@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Readiness Exceptions",
+  "description": "Accepted risks with justification and expiry. The scanner respects these but re-flags when they expire.",
+  "type": "object",
+  "required": ["version", "exceptions"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+$"
+    },
+    "exceptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["checkpoint_id", "justification", "accepted_by", "accepted_date", "expires"],
+        "properties": {
+          "checkpoint_id": {
+            "type": "string",
+            "description": "ID of the checkpoint being excepted"
+          },
+          "justification": {
+            "type": "string",
+            "description": "Why this gap is accepted. Be specific."
+          },
+          "decision_reference": {
+            "type": "string",
+            "description": "Link to architecture decision record, meeting notes, or approval"
+          },
+          "accepted_by": {
+            "type": "string",
+            "description": "Identity of the person accepting the risk"
+          },
+          "accepted_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "expires": {
+            "type": "string",
+            "format": "date",
+            "description": "When this exception expires. Scanner re-flags after this date."
+          }
+        }
+      }
+    }
+  }
+}

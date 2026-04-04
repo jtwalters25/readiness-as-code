@@ -1,0 +1,13 @@
+{
+  "service_name": "readiness-as-code",
+  "service_tags": [],
+  "_available_tags": [
+    "web-api",
+    "web-service",
+    "background-service",
+    "cli-tool",
+    "library",
+    "infrastructure"
+  ],
+  "_note": "Set service_tags to enable service-specific checks. Checks with applicable_tags will be skipped unless your service_tags match. See _available_tags for common values."
+}

@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "External Evidence Registry",
+  "description": "Human attestations for non-code artifacts. Each entry records who verified what, when, and links to evidence.",
+  "type": "object",
+  "required": ["version", "attestations"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+$"
+    },
+    "attestations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["checkpoint_id", "attested_by", "attested_date", "evidence_link"],
+        "properties": {
+          "checkpoint_id": {
+            "type": "string",
+            "description": "ID of the external or hybrid checkpoint"
+          },
+          "attested_by": {
+            "type": "string",
+            "description": "Identity of the person who verified this"
+          },
+          "attested_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "evidence_link": {
+            "type": "string",
+            "description": "URL to dashboard, registration, document, or screenshot"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Additional context about the verification"
+          },
+          "expires": {
+            "type": "string",
+            "format": "date",
+            "description": "When this attestation should be re-verified. Default: 90 days from attested_date."
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,220 @@
+{
+  "version": "1.0",
+  "metadata": {
+    "guideline_name": "Universal Engineering Standards",
+    "guideline_version": "1.0",
+    "last_updated": "2026-04-01",
+    "author": "readiness-as-code starter pack"
+  },
+  "checkpoints": [
+
+    {
+      "id": "gen-001",
+      "title": "README exists",
+      "description": "Every repository must have a README documenting purpose, setup, and usage.",
+      "guideline": "Universal Engineering Standards",
+      "guideline_section": "1.1 — Documentation",
+      "severity": "red",
+      "type": "code",
+      "verification": {
+        "method": "glob",
+        "pattern": "{README.md,README.rst,README.txt,README}",
+        "min_matches": 1
+      },
+      "applicable_tags": [],
+      "fix_hint": "Create a README.md in the repo root with sections: Purpose, Setup, Usage, Contributing.",
+      "doc_link": "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes"
+    },
+
+    {
+      "id": "gen-002",
+      "title": "License file exists",
+      "description": "Repository must declare its license for legal clarity.",
+      "guideline": "Universal Engineering Standards",
+      "guideline_section": "1.2 — Legal",
+      "severity": "yellow",
+      "type": "code",
+      "verification": {
+        "method": "glob",
+        "pattern": "{LICENSE,LICENSE.md,LICENSE.txt,LICENCE,LICENCE.md}",
+        "min_matches": 1
+      },
+      "applicable_tags": [],
+      "fix_hint": "Add a LICENSE file. Use https://choosealicense.com/ to pick one.",
+      "doc_link": "https://choosealicense.com/"
+    },
+
+    {
+      "id": "gen-003",
+      "title": "CI pipeline configured",
+      "description": "Repository must have a CI/CD pipeline definition for automated builds and tests.",
+      "guideline": "Universal Engineering Standards",
+      "guideline_section": "2.1 — Continuous Integration",
+      "severity": "red",
+      "type": "code",
+      "verification": {
+        "method": "glob",
+        "pattern": "{.github/workflows/*.yml,.github/workflows/*.yaml,azure-pipelines.yml,.azure-pipelines/*.yml,.gitlab-ci.yml,Jenkinsfile,.circleci/config.yml}",
+        "min_matches": 1
+      },
+      "applicable_tags": [],
+      "fix_hint": "Add a CI pipeline. See templates/ in readiness-as-code for GitHub Actions, Azure Pipelines, and GitLab CI examples."
+    },
+
+    {
+      "id": "gen-004",
+      "title": "Tests exist",
+      "description": "Repository must contain automated tests.",
+      "guideline": "Universal Engineering Standards",
+      "guideline_section": "2.2 — Testing",
+      "severity": "red",
+      "type": "code",
+      "verification": {
+        "method": "glob",
+        "pattern": "{tests/**,test/**,__tests__/**,**/test_*.py,**/*_test.go,**/*.test.ts,**/*.test.js,**/*.test.tsx,**/*.test.jsx,**/*.spec.ts,**/*.spec.js}",
+        "min_matches": 1
+      },
+      "applicable_tags": [],
+      "fix_hint": "Create a tests/ directory with at least one test file."
+    },
+
+    {
+      "id": "gen-005",
+      "title": "Dependency manifest present",
+      "description": "Repository must declare dependencies via a package manager.",
+      "guideline": "Universal Engineering Standards",
+      "guideline_section": "2.3 — Dependency Management",
+      "severity": "yellow",
+      "type": "code",
+      "verification": {
+        "method": "glob",
+        "pattern": "{requirements.txt,pyproject.toml,setup.py,setup.cfg,package.json,go.mod,Cargo.toml,*.csproj,*.sln,Gemfile,pom.xml,build.gradle,build.gradle.kts}",
+        "min_matches": 1
+      },
+      "applicable_tags": [],
+      "fix_hint": "Add a dependency manifest (requirements.txt, package.json, go.mod, etc.)."
+    },
+
+    {
+      "id": "gen-006",
+      "title": "No hardcoded AWS keys",
+      "description": "Repository must not contain hardcoded AWS access keys. This check uses a high-precision pattern (AKIA prefix) that produces virtually zero false positives.",
+      "guideline": "Universal Engineering Standards",
+      "guideline_section": "3.1 — Secret Management",
+      "severity": "red",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "AKIA[0-9A-Z]{16}",
+        "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**}/*.{py,js,ts,go,cs,java,rb,yaml,yml,json,env,toml,cfg}",
+        "min_matches": 0
+      },
+      "applicable_tags": [],
+      "fix_hint": "Remove hardcoded AWS keys. Use environment variables, AWS SSO, or a secrets manager. The detected pattern (AKIA...) is a real AWS access key ID."
+    },
+
+    {
+      "id": "gen-007",
+      "title": ".gitignore configured",
+      "description": "Repository should have a .gitignore to prevent committing build artifacts and secrets.",
+      "guideline": "Universal Engineering Standards",
+      "guideline_section": "1.3 — Repository Hygiene",
+      "severity": "yellow",
+      "type": "code",
+      "verification": {
+        "method": "file_exists",
+        "pattern": ".gitignore"
+      },
+      "applicable_tags": [],
+      "fix_hint": "Add a .gitignore appropriate for your language. See https://github.com/github/gitignore"
+    },
+
+    {
+      "id": "sec-001",
+      "title": "Security policy exists",
+      "description": "Repository should have a SECURITY.md describing how to report vulnerabilities.",
+      "guideline": "Universal Engineering Standards",
+      "guideline_section": "3.2 — Security Disclosure",
+      "severity": "yellow",
+      "type": "code",
+      "verification": {
+        "method": "glob",
+        "pattern": "{SECURITY.md,.github/SECURITY.md}",
+        "min_matches": 1
+      },
+      "applicable_tags": [],
+      "fix_hint": "Add a SECURITY.md with vulnerability reporting instructions.",
+      "doc_link": "https://docs.github.com/en/code-security/getting-started/adding-a-security-policy-to-your-repository"
+    },
+
+
+
+    {
+      "id": "ops-001",
+      "title": "Health check endpoint",
+      "description": "Web services must expose a health endpoint for liveness/readiness probes. This is a pattern-based check — if your health endpoint uses a non-standard name, add an exception.",
+      "guideline": "Universal Engineering Standards",
+      "guideline_section": "4.1 — Health Monitoring",
+      "severity": "red",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "(\\/health[\"'`z/]|healthcheck|health_check|readyz|livez)",
+        "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**,server/**,api/**}/*.{py,js,ts,go,cs,java,rb}",
+        "min_matches": 1,
+        "confidence": "likely"
+      },
+      "applicable_tags": ["web-api", "web-service"],
+      "fix_hint": "Add a /health endpoint that returns HTTP 200 when the service is operational."
+    },
+
+    {
+      "id": "ops-002",
+      "title": "Dockerfile or container config",
+      "description": "Containerized services must have a Dockerfile or deployment configuration.",
+      "guideline": "Universal Engineering Standards",
+      "guideline_section": "5.1 — Deployment",
+      "severity": "yellow",
+      "type": "code",
+      "verification": {
+        "method": "glob",
+        "pattern": "{Dockerfile,docker-compose.yml,docker-compose.yaml,*.dockerfile,chart/**,k8s/**,deploy/**,kustomization.yaml}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["web-api", "web-service", "background-service"],
+      "fix_hint": "Add a Dockerfile or deployment configuration for your service."
+    },
+
+    {
+      "id": "ext-001",
+      "title": "Monitoring dashboard configured",
+      "description": "Service must have a production monitoring dashboard showing key metrics (request rate, error rate, latency, saturation).",
+      "guideline": "Universal Engineering Standards",
+      "guideline_section": "4.4 — Monitoring",
+      "severity": "red",
+      "type": "external",
+      "verification": {
+        "method": "external_attestation",
+        "attestation_key": "monitoring_dashboard"
+      },
+      "applicable_tags": ["web-api", "web-service", "background-service"],
+      "fix_hint": "Create a monitoring dashboard and attest in .readiness/external-evidence.json with the dashboard URL."
+    },
+
+    {
+      "id": "ext-002",
+      "title": "On-call / incident registration",
+      "description": "Service must be registered in the incident management system with an on-call rotation.",
+      "guideline": "Universal Engineering Standards",
+      "guideline_section": "4.5 — Incident Management",
+      "severity": "red",
+      "type": "external",
+      "verification": {
+        "method": "external_attestation",
+        "attestation_key": "incident_registration"
+      },
+      "applicable_tags": ["web-api", "web-service", "background-service"],
+      "fix_hint": "Register your service in your incident management platform (PagerDuty, OpsGenie, ICM, etc.) and attest in .readiness/external-evidence.json"
+    }
+  ]
+}

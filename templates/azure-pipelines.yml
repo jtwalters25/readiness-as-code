@@ -1,0 +1,46 @@
+# readiness-as-code — Azure Pipelines template
+#
+# Add this as a stage in your pipeline or reference as a template.
+
+parameters:
+  - name: mode
+    type: string
+    default: 'full'
+    values: ['full', 'pr', 'calibrate']
+  - name: failOnRed
+    type: boolean
+    default: true
+  - name: pythonVersion
+    type: string
+    default: '3.11'
+
+stages:
+  - stage: ReadinessCheck
+    displayName: 'Readiness Compliance Scan'
+    jobs:
+      - job: Scan
+        displayName: 'Run readiness scan'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: ${{ parameters.pythonVersion }}
+
+          - script: pip install readiness-as-code
+            displayName: 'Install readiness-as-code'
+
+          - script: |
+              if [ "${{ parameters.mode }}" = "calibrate" ]; then
+                ready scan --verbose --calibrate --baseline .readiness/review-baseline.json
+              else
+                ready scan --verbose --baseline .readiness/review-baseline.json
+              fi
+            displayName: 'Run scan (${{ parameters.mode }} mode)'
+
+          - task: PublishBuildArtifacts@1
+            condition: always()
+            inputs:
+              PathtoPublish: '.readiness/review-baseline.json'
+              ArtifactName: 'readiness-baseline'
+            displayName: 'Publish baseline'

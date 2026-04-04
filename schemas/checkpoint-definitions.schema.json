@@ -1,0 +1,135 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Readiness Checkpoint Definitions",
+  "description": "Defines what to check, how to check it, and what guideline it maps to.",
+  "type": "object",
+  "required": ["version", "checkpoints"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Schema version for forward compatibility",
+      "pattern": "^\\d+\\.\\d+$"
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "guideline_name": { "type": "string" },
+        "guideline_version": { "type": "string" },
+        "guideline_url": { "type": "string", "format": "uri" },
+        "last_updated": { "type": "string", "format": "date" },
+        "author": { "type": "string" }
+      }
+    },
+    "checkpoints": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/checkpoint"
+      }
+    }
+  },
+  "definitions": {
+    "checkpoint": {
+      "type": "object",
+      "required": ["id", "title", "severity", "type", "verification"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier (e.g., 'ops-007', 'sec-003')",
+          "pattern": "^[a-z]+-\\d{3}$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable name of the checkpoint"
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed explanation of what this checkpoint verifies and why"
+        },
+        "guideline": {
+          "type": "string",
+          "description": "Name of the source guideline document"
+        },
+        "guideline_section": {
+          "type": "string",
+          "description": "Specific section reference in the guideline"
+        },
+        "guideline_version": {
+          "type": "string",
+          "description": "Version of the guideline this checkpoint was derived from"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["red", "yellow"],
+          "description": "red = cannot ship (blocks PR), yellow = fix before launch (warning)"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["code", "external", "hybrid"],
+          "description": "code = automated scan, external = human attestation, hybrid = both"
+        },
+        "verification": {
+          "$ref": "#/definitions/verification"
+        },
+        "applicable_tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Service tags this checkpoint applies to. Empty = applies to all."
+        },
+        "fix_hint": {
+          "type": "string",
+          "description": "Actionable guidance for resolving a failure"
+        },
+        "doc_link": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL to relevant documentation or guideline section"
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "required": ["method"],
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["file_exists", "glob", "grep", "grep_count", "file_count", "json_path", "external_attestation", "hybrid"],
+          "description": "Verification strategy"
+        },
+        "pattern": {
+          "type": "string",
+          "description": "File glob or regex pattern (for glob, grep, file_exists methods)"
+        },
+        "target": {
+          "type": "string",
+          "description": "Target file or directory to inspect (for grep, json_path methods)"
+        },
+        "min_matches": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Minimum number of matches required to pass"
+        },
+        "json_path": {
+          "type": "string",
+          "description": "JSONPath expression for json_path method"
+        },
+        "expected_value": {
+          "description": "Expected value at the JSON path (any type)"
+        },
+        "attestation_key": {
+          "type": "string",
+          "description": "Key in external-evidence.json for external/hybrid checks"
+        },
+        "code_verification": {
+          "$ref": "#/definitions/verification",
+          "description": "Code-side check for hybrid verifications"
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["verified", "likely", "inconclusive"],
+          "default": "verified",
+          "description": "Scanner confidence in the result. 'likely' and 'inconclusive' produce warnings instead of hard failures."
+        }
+      }
+    }
+  }
+}
