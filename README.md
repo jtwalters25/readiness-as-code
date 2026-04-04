@@ -7,6 +7,12 @@
 </h3>
 
 <p align="center">
+  The reference implementation of <strong>readiness as code</strong> —<br/>
+  the practice of expressing review criteria as committed definitions,<br/>
+  evaluated on every change, with drift detected automatically.
+</p>
+
+<p align="center">
   No infrastructure. No SaaS. No subscription.<br/>
   JSON definitions + Python scanner + CI template.
 </p>
@@ -28,11 +34,13 @@
 
 ---
 
-## Why This Exists
+## The Practice: Readiness as Code
 
-Most teams perform engineering, security, and operational reviews at a point in time. The moment the review ends, readiness begins to drift. Changes ship, telemetry gets removed, configs shift, exception handling gets altered — and nobody notices until an incident.
+Most teams treat readiness as a moment — a review meeting, a checklist, a sign-off. The moment it ends, drift begins. Changes ship, telemetry gets removed, configs shift, exception handling gets altered — and nobody notices until an incident.
 
-**ready** treats readiness as a continuously evaluated property: review criteria are expressed as code, exceptions are explicit and time-bound, drift is detected automatically, and human judgment is preserved but made visible.
+**Readiness as code** is the practice of treating readiness as a continuously evaluated property instead. Review criteria are expressed as committed definitions. Every change is scanned against them. Exceptions are explicit and time-bound. Drift is detected before it becomes an incident.
+
+`ready` is the tool that implements this practice.
 
 It replaces **prep work**, not judgment.
 
@@ -246,6 +254,8 @@ ready author --from docs/ops-review.md
 Works with Claude, ChatGPT, Copilot, Cursor, Gemini — any model that can read a file.
 
 ## Design Principles
+
+These principles define what *readiness as code* means in practice. They are not implementation choices — they are the practice itself.
 
 1. **Detection, not decisions.** The scanner finds gaps. Humans decide what to do.
 2. **Continuous, not ceremonial.** Checked on every PR, not once a quarter.

@@ -4,7 +4,9 @@
   <img src="assets/architecture.svg" alt="ready architecture" width="860" />
 </p>
 
-This document explains the key design decisions in **ready**, what alternatives were considered, and why specific tradeoffs were made. It's written for engineers evaluating whether this system fits their organization, and for anyone interested in the thinking behind the design.
+**Readiness as code** is the practice of expressing engineering and operational review criteria as committed definitions, evaluated continuously, with drift detected automatically and accepted risks made explicit and time-bound. **ready** is the reference implementation of this practice.
+
+This document explains the key design decisions in ready, what alternatives were considered, and why specific tradeoffs were made. It's written for engineers evaluating whether this system fits their organization, and for anyone interested in the thinking behind the design.
 
 ## Core Architectural Decision: Files, Not Infrastructure
 
