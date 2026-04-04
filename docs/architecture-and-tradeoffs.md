@@ -1,5 +1,9 @@
 # Architecture & Tradeoffs
 
+<p align="center">
+  <img src="assets/architecture.svg" alt="readiness-as-code architecture" width="860" />
+</p>
+
 This document explains the key design decisions in readiness-as-code, what alternatives were considered, and why specific tradeoffs were made. It's written for engineers evaluating whether this system fits their organization, and for anyone interested in the thinking behind the design.
 
 ## Core Architectural Decision: Files, Not Infrastructure

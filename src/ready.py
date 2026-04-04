@@ -276,11 +276,215 @@ def cmd_scan(args):
     return 0 if result.is_ready else 1
 
 
+WORK_ITEMS_FILE = "work-items.json"
+
+
+def _load_adapter(adapter_name: str):
+    """Instantiate the requested work item adapter."""
+    name = adapter_name.lower()
+    if name in ("github", "github_issues"):
+        from src.adapters.github_issues import GitHubIssuesAdapter
+        return GitHubIssuesAdapter()
+    elif name in ("ado", "azure", "azuredevops"):
+        from src.adapters.ado import AzureDevOpsAdapter
+        return AzureDevOpsAdapter()
+    elif name == "jira":
+        from src.adapters.jira import JiraAdapter
+        return JiraAdapter()
+    else:
+        raise ValueError(f"Unknown adapter '{adapter_name}'. Choices: github, ado, jira")
+
+
+def _load_work_items(readiness_dir: str) -> dict:
+    """Load tracked work items from .readiness/work-items.json."""
+    path = os.path.join(readiness_dir, WORK_ITEMS_FILE)
+    if os.path.isfile(path):
+        with open(path) as f:
+            return json.load(f)
+    return {"version": "1.0", "items": {}}
+
+
+def _save_work_items(readiness_dir: str, data: dict) -> None:
+    path = os.path.join(readiness_dir, WORK_ITEMS_FILE)
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+
+
 def cmd_items(args):
-    """Work item management."""
-    print(f"{YELLOW}Work item management requires an adapter configuration.")
-    print(f"See: ready items --help{RESET}")
-    return 0
+    """Work item management — create items for gaps, verify closed items vs code."""
+    repo_root = find_repo_root()
+    readiness_dir = os.path.join(repo_root, READINESS_DIR)
+
+    if not os.path.isdir(readiness_dir):
+        print(f"{RED}✗ No {READINESS_DIR}/ found. Run 'ready init' first.{RESET}")
+        return 1
+
+    try:
+        adapter = _load_adapter(args.adapter)
+    except ValueError as e:
+        print(f"{RED}✗ {e}{RESET}")
+        return 1
+    except Exception as e:
+        print(f"{RED}✗ Could not initialize adapter: {e}{RESET}")
+        return 1
+
+    # Run scan to get current state
+    definitions_path = os.path.join(readiness_dir, DEFINITIONS_FILE)
+    evidence_path = os.path.join(readiness_dir, EVIDENCE_FILE)
+    exceptions_path = os.path.join(readiness_dir, EXCEPTIONS_FILE)
+    config_path = os.path.join(readiness_dir, "config.json")
+
+    service_tags = None
+    service_name = None
+    if os.path.isfile(config_path):
+        with open(config_path) as f:
+            cfg = json.load(f)
+            service_tags = cfg.get("service_tags")
+            service_name = cfg.get("service_name")
+
+    from src.validators import run_scan, Status, Severity
+    result = run_scan(
+        repo_root=repo_root,
+        definitions_path=definitions_path,
+        evidence_path=evidence_path,
+        exceptions_path=exceptions_path,
+        service_tags=service_tags,
+        service_name=service_name,
+    )
+
+    work_items = _load_work_items(readiness_dir)
+    tracked = work_items.get("items", {})  # checkpoint_id -> {id, url, adapter}
+
+    if args.create:
+        # Propose work items for all failing checks without an existing item
+        failures = [
+            r for r in result.results
+            if r.status.value in ("fail", "expired_exception")
+        ]
+
+        if not failures:
+            print(f"{GREEN}✓ No gaps to create work items for.{RESET}")
+            return 0
+
+        print(f"\n{BOLD}Proposed work items for {result.service_name}{RESET}")
+        print(f"{DIM}Adapter: {args.adapter} | {len(failures)} gap(s){RESET}\n")
+
+        created = 0
+        skipped = 0
+        for r in failures:
+            if r.checkpoint_id in tracked:
+                print(f"  {DIM}~ [{r.checkpoint_id}] {r.title} — already tracked: {tracked[r.checkpoint_id]['url']}{RESET}")
+                skipped += 1
+                continue
+
+            severity_color = RED if r.severity == Severity.RED else YELLOW
+            print(f"  {severity_color}[{r.severity.value.upper()}]{RESET} [{r.checkpoint_id}] {r.title}")
+            if r.fix_hint:
+                print(f"    {DIM}Fix: {r.fix_hint}{RESET}")
+            if r.evidence:
+                for e in r.evidence[:3]:
+                    print(f"    {DIM}evidence: {e}{RESET}")
+
+            if not args.yes:
+                answer = input(f"  Create work item? [y/N] ").strip().lower()
+                if answer != "y":
+                    print(f"    {DIM}Skipped.{RESET}")
+                    continue
+
+            from src.adapters import WorkItemDraft
+            draft = WorkItemDraft(
+                checkpoint_id=r.checkpoint_id,
+                title=r.title,
+                description=r.message or r.title,
+                severity=r.severity.value,
+                evidence=r.evidence,
+                fix_hint=r.fix_hint,
+                doc_link=r.doc_link,
+                guideline=r.guideline,
+                guideline_section=r.guideline_section,
+                labels=[f"cp:{r.checkpoint_id}"],
+            )
+            try:
+                item = adapter.create_draft(draft)
+                tracked[r.checkpoint_id] = {
+                    "id": item.id,
+                    "url": item.url,
+                    "adapter": args.adapter,
+                }
+                print(f"    {GREEN}✓ Created: {item.url}{RESET}")
+                created += 1
+            except Exception as e:
+                print(f"    {RED}✗ Failed to create: {e}{RESET}")
+
+        work_items["items"] = tracked
+        _save_work_items(readiness_dir, work_items)
+        print(f"\n{GREEN}✓ {created} work item(s) created, {skipped} already tracked.{RESET}")
+        print(f"{DIM}Tracked in {READINESS_DIR}/{WORK_ITEMS_FILE}{RESET}")
+        return 0
+
+    elif args.verify:
+        # Cross-check: regression (item closed but code still fails) or stale (code passes but item open)
+        if not tracked:
+            print(f"{YELLOW}No tracked work items found. Run 'ready items --create' first.{RESET}")
+            return 0
+
+        scan_by_id = {r.checkpoint_id: r for r in result.results}
+
+        regressions = []
+        stale = []
+        ok = []
+
+        print(f"\n{BOLD}Work item verification for {result.service_name}{RESET}\n")
+
+        for cp_id, item_info in tracked.items():
+            remote = adapter.get_status(item_info["id"])
+            if not remote:
+                print(f"  {YELLOW}⚠{RESET} [{cp_id}] Could not fetch item {item_info['id']} — skipping")
+                continue
+
+            scan_result = scan_by_id.get(cp_id)
+            item_closed = remote.status.lower() in ("closed", "done", "resolved", "complete", "completed")
+            code_failing = scan_result and scan_result.status.value in ("fail", "expired_exception")
+
+            if item_closed and code_failing:
+                regressions.append((cp_id, remote, scan_result))
+            elif not item_closed and scan_result and scan_result.status.value == "pass":
+                stale.append((cp_id, remote, scan_result))
+            else:
+                ok.append((cp_id, remote))
+
+        if regressions:
+            print(f"{RED}🔴 REGRESSIONS ({len(regressions)}) — item closed but code still fails{RESET}")
+            for cp_id, remote, scan_r in regressions:
+                print(f"   {RED}✗{RESET} [{cp_id}] {scan_r.title}")
+                print(f"     {DIM}Work item: {remote.url} (status: {remote.status}){RESET}")
+            print()
+
+        if stale:
+            print(f"{YELLOW}🟡 STALE ({len(stale)}) — code passes but work item still open{RESET}")
+            for cp_id, remote, scan_r in stale:
+                print(f"   {YELLOW}○{RESET} [{cp_id}] {scan_r.title}")
+                print(f"     {DIM}Work item: {remote.url} (status: {remote.status}){RESET}")
+
+                if args.yes or input(f"  Close work item {remote.id}? [y/N] ").strip().lower() == "y":
+                    success = adapter.close(remote.id, "Resolved — readiness check now passing.")
+                    if success:
+                        print(f"     {GREEN}✓ Closed.{RESET}")
+                        del tracked[cp_id]
+                    else:
+                        print(f"     {RED}✗ Could not close.{RESET}")
+            print()
+
+        if ok:
+            print(f"{GREEN}✓ {len(ok)} work item(s) in sync{RESET}")
+
+        work_items["items"] = tracked
+        _save_work_items(readiness_dir, work_items)
+        return 1 if regressions else 0
+
+    else:
+        print(f"{YELLOW}Specify --create or --verify.{RESET}")
+        return 0
 
 
 def cmd_aggregate(args):
@@ -356,9 +560,10 @@ def main():
 
     # items
     items_parser = subparsers.add_parser("items", help="Manage work items")
-    items_parser.add_argument("--create", action="store_true", help="Create work items")
+    items_parser.add_argument("--create", action="store_true", help="Create work items for gaps")
     items_parser.add_argument("--verify", action="store_true", help="Verify work items vs code")
-    items_parser.add_argument("--adapter", type=str, default="github", help="Adapter: github, ado")
+    items_parser.add_argument("--adapter", type=str, default="github", help="Adapter: github, ado, jira")
+    items_parser.add_argument("--yes", "-y", action="store_true", help="Auto-approve all prompts")
 
     # aggregate
     agg_parser = subparsers.add_parser("aggregate", help="Cross-repo heatmap")

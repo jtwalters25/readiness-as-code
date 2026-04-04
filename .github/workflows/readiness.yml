@@ -40,3 +40,48 @@ jobs:
           name: readiness-baseline
           path: .readiness/review-baseline.json
           retention-days: 90
+
+      # ── Optional: Slack notification on failure ──────────────────────────
+      # Add SLACK_WEBHOOK_URL to your repo secrets to enable.
+      - name: Notify Slack on failure
+        if: failure() && env.SLACK_WEBHOOK_URL != ''
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -s -X POST "$SLACK_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "text": "🔴 Readiness scan failed on *${{ github.repository }}*",
+              "attachments": [{
+                "color": "danger",
+                "fields": [
+                  {"title": "Branch", "value": "${{ github.head_ref || github.ref_name }}", "short": true},
+                  {"title": "Triggered by", "value": "${{ github.actor }}", "short": true},
+                  {"title": "Details", "value": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}
+                ]
+              }]
+            }'
+
+      # ── Optional: Microsoft Teams notification on failure ────────────────
+      # Add TEAMS_WEBHOOK_URL to your repo secrets to enable.
+      - name: Notify Teams on failure
+        if: failure() && env.TEAMS_WEBHOOK_URL != ''
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+        run: |
+          curl -s -X POST "$TEAMS_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "@type": "MessageCard",
+              "@context": "https://schema.org/extensions",
+              "themeColor": "FF0000",
+              "summary": "Readiness scan failed",
+              "sections": [{
+                "activityTitle": "🔴 Readiness scan failed",
+                "activitySubtitle": "${{ github.repository }} — ${{ github.head_ref || github.ref_name }}",
+                "facts": [
+                  {"name": "Triggered by", "value": "${{ github.actor }}"},
+                  {"name": "Run", "value": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}
+                ]
+              }]
+            }'

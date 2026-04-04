@@ -67,6 +67,12 @@ Readiness: 80%  (8/10 passing)
 
 Three commands. No config files. No accounts. No dashboards to deploy.
 
+## Architecture
+
+<p align="center">
+  <img src="docs/assets/architecture.svg" alt="readiness-as-code architecture" width="860" />
+</p>
+
 ## How It Works
 
 ```
