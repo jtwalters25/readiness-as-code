@@ -4,7 +4,7 @@
     "guideline_name": "Web API Production Readiness",
     "guideline_version": "1.0",
     "last_updated": "2026-04-01",
-    "author": "readiness-as-code web-api pack"
+    "author": "ready web-api pack"
   },
   "checkpoints": [
     {

@@ -1,5 +1,5 @@
 """
-Azure DevOps adapter for readiness-as-code work item tracking.
+Azure DevOps adapter for ready work item tracking.
 
 Requires: AZURE_DEVOPS_PAT and AZURE_DEVOPS_ORG environment variables.
 """

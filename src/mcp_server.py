@@ -1,5 +1,5 @@
 """
-readiness-as-code MCP server.
+ready MCP server.
 
 Exposes readiness scanning as MCP tools so any AI assistant can run scans,
 inspect checkpoints, and aggregate results — without manual CLI usage.
@@ -8,7 +8,7 @@ Supported clients: Claude Desktop, Cursor, VS Code + Copilot, Continue,
 any tool that implements the Model Context Protocol (MCP).
 
 Usage:
-    pip install "readiness-as-code[mcp]"
+    pip install "ready[mcp]"
     ready-mcp          # starts the stdio MCP server
 
 Then configure your AI tool to launch this server. See mcp/README.md.
@@ -24,7 +24,7 @@ try:
 except ImportError:
     print(
         "MCP support requires the 'mcp' package.\n"
-        "Install it with:  pip install \"readiness-as-code[mcp]\"\n"
+        "Install it with:  pip install \"ready[mcp]\"\n"
         "Or:               pip install mcp",
         file=sys.stderr,
     )
@@ -36,9 +36,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from src.validators import run_scan, Status, Severity
 
 mcp = FastMCP(
-    "readiness-as-code",
+    "ready",
     instructions=(
-        "You have access to readiness-as-code — a tool for continuously evaluating "
+        "You have access to ready — a tool for continuously evaluating "
         "whether a software service meets its engineering and operational review criteria. "
         "Use scan_repo to assess a codebase. Use list_checkpoints to see what's being checked. "
         "Use explain_checkpoint for detail on a specific check. Use aggregate_baselines to "

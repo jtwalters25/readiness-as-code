@@ -1,4 +1,4 @@
-# readiness-as-code — GitLab CI template
+# ready — GitLab CI template
 #
 # Include in your .gitlab-ci.yml:
 #   include:
@@ -8,7 +8,7 @@ readiness-scan:
   stage: test
   image: python:3.11-slim
   script:
-    - pip install readiness-as-code
+    - pip install ready
     - ready scan --verbose --baseline .readiness/review-baseline.json
   artifacts:
     paths:

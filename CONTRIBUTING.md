@@ -1,4 +1,4 @@
-# Contributing to readiness-as-code
+# Contributing to ready
 
 Thanks for your interest in contributing.
 
@@ -6,7 +6,7 @@ Thanks for your interest in contributing.
 
 ```bash
 git clone https://github.com/jtwalters25/readiness-as-code.git
-cd readiness-as-code
+cd readiness-as-code  # the GitHub repo name
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"

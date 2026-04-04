@@ -1,0 +1,157 @@
+{
+  "version": "1.0",
+  "metadata": {
+    "guideline_name": "Observability Baseline",
+    "guideline_version": "1.0",
+    "last_updated": "2026-04-04",
+    "author": "ready observability-baseline pack"
+  },
+  "checkpoints": [
+
+    {
+      "id": "obs-001",
+      "title": "Structured logging library present",
+      "description": "Service should use a structured logging library to produce machine-parseable log output (JSON or key-value). Unstructured logs are difficult to query and alert on.",
+      "guideline": "Observability Baseline",
+      "guideline_section": "1.1 — Logging",
+      "severity": "yellow",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "(structlog|loguru|python-json-logger|winston|pino|bunyan|zap|zerolog|logrus|slog|log4j2|logback|Microsoft\\.Extensions\\.Logging|Serilog|NLog|zerolog|apex/log)",
+        "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**,server/**,api/**}/*.{py,js,ts,go,cs,java,rb}",
+        "min_matches": 1,
+        "confidence": "likely"
+      },
+      "applicable_tags": [],
+      "fix_hint": "Add a structured logging library: Python: structlog or loguru. Node.js: pino or winston. Go: zap or zerolog. Java: logback with JSON encoder. .NET: Serilog."
+    },
+
+    {
+      "id": "obs-002",
+      "title": "Log level configurable via environment",
+      "description": "Log verbosity must be configurable at runtime via an environment variable so it can be adjusted without a code change.",
+      "guideline": "Observability Baseline",
+      "guideline_section": "1.2 — Log Configuration",
+      "severity": "yellow",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "(?i)(LOG_LEVEL|LOG_VERBOSITY|LOGGING_LEVEL|log[_.]level)",
+        "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**,server/**,api/**,config/**}/*.{py,js,ts,go,cs,java,rb,yaml,yml,toml,cfg,ini,env.example}",
+        "min_matches": 1,
+        "confidence": "likely"
+      },
+      "applicable_tags": [],
+      "fix_hint": "Read log level from an environment variable: Python: logging.getLevelName(os.environ.get('LOG_LEVEL', 'INFO')). Node.js: process.env.LOG_LEVEL. Go: os.Getenv('LOG_LEVEL')."
+    },
+
+    {
+      "id": "obs-003",
+      "title": "Distributed tracing SDK present",
+      "description": "Service should emit distributed traces so requests can be followed across service boundaries.",
+      "guideline": "Observability Baseline",
+      "guideline_section": "2.1 — Tracing",
+      "severity": "yellow",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "(opentelemetry|open_telemetry|jaeger|zipkin|datadog\\.trace|newrelic|honeycomb|lightstep|aws-xray|applicationinsights|AppInsights|micrometer.*tracing)",
+        "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**,server/**,api/**}/*.{py,js,ts,go,cs,java,rb}",
+        "min_matches": 1,
+        "confidence": "likely"
+      },
+      "applicable_tags": ["web-api", "web-service", "background-service"],
+      "fix_hint": "Add OpenTelemetry (vendor-neutral, recommended): Python: opentelemetry-sdk. Node.js: @opentelemetry/sdk-node. Go: go.opentelemetry.io/otel. Java: opentelemetry-java.",
+      "doc_link": "https://opentelemetry.io/docs/getting-started/"
+    },
+
+    {
+      "id": "obs-004",
+      "title": "Health or readiness endpoint",
+      "description": "Web services must expose a health endpoint used by load balancers and orchestration platforms for liveness and readiness probes.",
+      "guideline": "Observability Baseline",
+      "guideline_section": "3.1 — Health Checks",
+      "severity": "red",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "(\\/health[\"'`/]|healthcheck|health_check|readyz|livez|\\/ping[\"'`/])",
+        "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**,server/**,api/**}/*.{py,js,ts,go,cs,java,rb}",
+        "min_matches": 1,
+        "confidence": "likely"
+      },
+      "applicable_tags": ["web-api", "web-service"],
+      "fix_hint": "Add a /health endpoint returning HTTP 200 when the service is healthy. Include a /ready endpoint if your service has startup dependencies."
+    },
+
+    {
+      "id": "obs-005",
+      "title": "Metrics instrumentation present",
+      "description": "Service should emit metrics (request count, latency, error rate) so dashboards and alerts can be built.",
+      "guideline": "Observability Baseline",
+      "guideline_section": "2.2 — Metrics",
+      "severity": "yellow",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "(prometheus_client|prom-client|micrometer|statsd|datadog.*metric|newrelic.*metric|opentelemetry.*metric|cloudwatch.*metric|Counter|Histogram|Gauge|Summary)(?i)",
+        "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**,server/**,api/**}/*.{py,js,ts,go,cs,java,rb}",
+        "min_matches": 1,
+        "confidence": "likely"
+      },
+      "applicable_tags": ["web-api", "web-service", "background-service"],
+      "fix_hint": "Add metrics instrumentation. OpenTelemetry Metrics is vendor-neutral. Prometheus client libraries are widely supported. At minimum, track request count, latency (p50/p99), and error rate.",
+      "doc_link": "https://opentelemetry.io/docs/concepts/signals/metrics/"
+    },
+
+    {
+      "id": "obs-006",
+      "title": "Monitoring dashboard configured",
+      "description": "Service must have a production monitoring dashboard showing the four golden signals: request rate, error rate, latency (p99), and saturation.",
+      "guideline": "Observability Baseline",
+      "guideline_section": "3.2 — Dashboards",
+      "severity": "red",
+      "type": "external",
+      "verification": {
+        "method": "external_attestation",
+        "attestation_key": "monitoring_dashboard"
+      },
+      "applicable_tags": ["web-api", "web-service", "background-service"],
+      "fix_hint": "Create a monitoring dashboard (Grafana, Datadog, CloudWatch, Azure Monitor) and attest in .readiness/external-evidence.json with attestation_key 'monitoring_dashboard' and a link to the dashboard."
+    },
+
+    {
+      "id": "obs-007",
+      "title": "Alerting configured",
+      "description": "Service must have at least one alert defined for critical failure conditions (error rate spike, latency degradation, or service down).",
+      "guideline": "Observability Baseline",
+      "guideline_section": "3.3 — Alerting",
+      "severity": "red",
+      "type": "external",
+      "verification": {
+        "method": "external_attestation",
+        "attestation_key": "alerting_configured"
+      },
+      "applicable_tags": ["web-api", "web-service", "background-service"],
+      "fix_hint": "Define alerts for your service (PagerDuty, OpsGenie, Grafana Alerting, CloudWatch Alarms) and attest in .readiness/external-evidence.json with attestation_key 'alerting_configured' and a link to the alert configuration."
+    },
+
+    {
+      "id": "obs-008",
+      "title": "On-call / incident registration",
+      "description": "Service must be registered in the incident management system with an on-call rotation so there is a clear owner when things go wrong.",
+      "guideline": "Observability Baseline",
+      "guideline_section": "3.4 — Incident Management",
+      "severity": "red",
+      "type": "external",
+      "verification": {
+        "method": "external_attestation",
+        "attestation_key": "incident_registration"
+      },
+      "applicable_tags": ["web-api", "web-service", "background-service"],
+      "fix_hint": "Register your service in your incident management platform (PagerDuty, OpsGenie, ICM, VictorOps) with an on-call schedule and escalation policy. Attest in .readiness/external-evidence.json with attestation_key 'incident_registration'."
+    }
+
+  ]
+}

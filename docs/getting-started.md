@@ -1,75 +1,74 @@
 # Getting Started
 
-This guide walks you from zero to continuous readiness scanning in under 30 minutes.
+This guide walks you from zero to continuous readiness scanning in under 15 minutes.
 
 ## Prerequisites
 
 - Python 3.10+
 - A git repository you want to scan
 
-## Step 1: Install (1 minute)
+## Step 1: Install and scan (30 seconds)
 
 ```bash
-pip install readiness-as-code
-```
+pip install ready
 
-Or clone the repo directly:
-
-```bash
-git clone https://github.com/jtwalters25/readiness-as-code.git
-```
-
-## Step 2: Initialize (1 minute)
-
-Navigate to your repo and run:
-
-```bash
 cd your-repo
-ready init
-```
-
-This creates a `.readiness/` directory with:
-
-| File | Purpose |
-|------|---------|
-| `checkpoint-definitions.json` | 15 universal checks that apply to any codebase |
-| `exceptions.json` | Empty — add accepted risks here |
-| `external-evidence.json` | Empty — add attestations for non-code artifacts here |
-
-## Step 3: First Scan (10 seconds)
-
-```bash
 ready scan
 ```
 
-You'll see output like:
+No init. No config files. `ready scan` auto-detects your project type and runs immediately:
 
 ```
-ready? — your-repo
-Readiness: 73%  (11/15 passing)
+ready? — your-service   73%   1 blocking · 2 warnings
 
-🔴 RED — cannot ship (2)
-   ✗ [sec-001] Security policy exists
-   ✗ [ext-001] Monitoring dashboard configured
+  ✗ No secrets in code
+    src/config.py:14
+    → Remove hardcoded keys. Use environment variables or a secrets manager.
 
-🟡 YELLOW — fix before launch (2)
-   ○ [gen-002] License file exists
-   ○ [ops-002] Logging configured
-
-🟢 11 checks passing
+  + 2 warnings   (ready scan --verbose)
 ```
 
-Share this with your team — it's a starting point, not a report card.
+Run `ready scan --verbose` to see everything — warnings, passing checks, exceptions, and fix hints for all failures.
 
-## Step 4: Calibrate (1-2 weeks)
+## Step 2: Initialize to customize (1 minute)
 
-Run in report-only mode so nothing blocks PRs:
+When you're ready to commit your configuration, initialize a `.readiness/` directory:
+
+```bash
+ready init                              # Universal starter (default)
+ready init --pack web-api               # REST/HTTP API checks
+ready init --pack security-baseline     # Secrets, dependency hygiene, security policy
+ready init --pack observability-baseline # Logging, tracing, metrics, dashboards
+ready init --list-packs                 # Show all available packs
+```
+
+This creates:
+
+| File | Purpose |
+|------|---------|
+| `checkpoint-definitions.json` | The checks to run |
+| `exceptions.json` | Accepted risks with expiry dates |
+| `external-evidence.json` | Human attestations for non-code artifacts |
+| `config.json` | Service name and tags |
+
+Set your `service_tags` in `config.json` to enable service-specific checks:
+
+```json
+{
+  "service_name": "my-api",
+  "service_tags": ["web-api"]
+}
+```
+
+## Step 3: Calibrate (1–2 weeks)
+
+Run in report-only mode while your team reviews results:
 
 ```bash
 ready scan --calibrate
 ```
 
-Walk through results with your team:
+This runs the full scan but never fails the exit code — useful while you tune definitions and file exceptions before turning on enforcement.
 
 **Red items that are intentional?** Add an exception:
 
@@ -79,8 +78,8 @@ Walk through results with your team:
   "version": "1.0",
   "exceptions": [
     {
-      "checkpoint_id": "ops-004",
-      "justification": "CLI tool, not a containerized service",
+      "checkpoint_id": "ops-002",
+      "justification": "CLI tool — containerization not applicable",
       "accepted_by": "jwalters",
       "accepted_date": "2026-04-01",
       "expires": "2027-04-01"
@@ -89,7 +88,7 @@ Walk through results with your team:
 }
 ```
 
-**External items you've already done?** Add attestation:
+**External items already done?** Add an attestation:
 
 ```json
 // .readiness/external-evidence.json
@@ -107,39 +106,31 @@ Walk through results with your team:
 }
 ```
 
-**Checks that don't apply?** Configure service tags in `.readiness/config.json`:
+Run `ready decisions` at any time to see all active, expiring, and expired exceptions in one view.
 
-```json
-{
-  "service_name": "my-cli-tool",
-  "service_tags": ["cli-tool"]
-}
+## Step 4: Add custom checkpoints
+
+The built-in packs cover common patterns. To translate your own review guidelines into checkpoints:
+
+```bash
+ready author --from docs/ops-review.md
 ```
 
-Checks tagged with `applicable_tags: ["web-api"]` will be automatically skipped.
-
-## Step 5: Add Custom Checkpoints
-
-The starter pack covers universal basics. Add your own team's requirements:
-
-**Option A: Write them by hand**
-
-See [Checkpoint Authoring Guide](checkpoint-authoring.md) for the full schema.
-
-**Option B: Use the LLM skill**
-
-If you use GitHub Copilot, Cursor, or Claude:
+This writes an `author-prompt.md` file combining your guideline with checkpoint authoring instructions. Paste it into any AI:
 
 ```
-"Read our operational review guidelines at docs/ops-review.md 
-and generate checkpoint definitions for each requirement."
+Claude:   "Read author-prompt.md and generate checkpoint definitions"
+Cursor:   @author-prompt.md
+Copilot:  #file:author-prompt.md
 ```
 
-The LLM skill at `copilot-skills/author-checkpoints.instructions.md` guides the model to produce properly structured JSON.
+The AI proposes checkpoints; you review and approve each one before writing to `.readiness/checkpoint-definitions.json`.
 
-## Step 6: Enable PR Gating
+See [Checkpoint Authoring](checkpoint-authoring.md) for the full schema if you prefer to write definitions by hand.
 
-When your team is calibrated and the noise is gone:
+## Step 5: Enable PR gating
+
+When your team is calibrated and noise is gone:
 
 **GitHub Actions:**
 
@@ -154,7 +145,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
-      - run: pip install readiness-as-code
+      - run: pip install ready
       - run: ready scan
 ```
 
@@ -162,26 +153,60 @@ jobs:
 
 ```yaml
 - script: |
-    pip install readiness-as-code
+    pip install ready
     ready scan
   displayName: 'Readiness scan'
 ```
 
-Red failures now block the PR. Yellow items are informational. Your team can't accidentally drift from what was reviewed.
+**GitLab CI:**
 
-## Step 7: Track Baselines Over Time
+```yaml
+readiness:
+  script:
+    - pip install ready
+    - ready scan
+```
 
-Write baselines on each scan:
+Red failures block the PR. Yellow items are informational. Teams can't accidentally drift from what was reviewed.
+
+## Step 6: Track history and add a badge
+
+Commit a baseline snapshot to enable drift tracking on every subsequent scan:
 
 ```bash
 ready scan --baseline .readiness/review-baseline.json
+git add .readiness/review-baseline.json
+git commit -m "chore: add readiness baseline"
 ```
 
-Commit the baseline to git. Now you have an auditable history of your compliance posture over time. Each scan can diff against the previous baseline to detect regressions.
+From now on, every `ready scan` shows the delta automatically:
+
+```
+ready? — your-service   85%   ✓   ▲ +12%
+```
+
+Generate a README badge:
+
+```bash
+ready badge
+```
+
+```
+[![ready](https://img.shields.io/badge/ready-85%25-brightgreen)](.readiness/review-baseline.json)
+```
+
+Paste it at the top of your README. Teams and reviewers see your readiness score at a glance.
+
+View trend over time:
+
+```bash
+ready history
+```
 
 ## Next Steps
 
-- [Verification Types](verification-types.md) — Deep dive on code, external, and hybrid checks
+- [Verification Types](verification-types.md) — Code, external, and hybrid checks explained
 - [Checkpoint Authoring](checkpoint-authoring.md) — Writing custom checkpoint definitions
 - [CI Integration](ci-integration.md) — Advanced pipeline configurations
 - [Cross-Repo Aggregation](cross-repo-aggregation.md) — Organization-wide compliance heatmaps
+- [Architecture & Tradeoffs](architecture-and-tradeoffs.md) — Design decisions and why they were made

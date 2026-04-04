@@ -1,5 +1,5 @@
 """
-GitHub Issues adapter for readiness-as-code work item tracking.
+GitHub Issues adapter for ready work item tracking.
 
 Requires: GITHUB_TOKEN environment variable with repo scope.
 """
@@ -73,7 +73,7 @@ class GitHubIssuesAdapter(WorkItemAdapter):
             body_parts.extend(["", f"**Docs:** {draft.doc_link}"])
 
         body_parts.append(
-            "\n\n---\n*Created by [readiness-as-code](https://github.com/jtwalters25/readiness-as-code)*"
+            "\n\n---\n*Created by [ready](https://github.com/jtwalters25/readiness-as-code)*"
         )
 
         labels = ["readiness-gap", f"severity:{draft.severity}"] + draft.labels

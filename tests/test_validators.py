@@ -1,4 +1,4 @@
-"""Tests for the readiness-as-code scan engine."""
+"""Tests for the ready scan engine."""
 
 import json
 import os

@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "readiness-as-code"
-version = "0.1.0"
-description = "Continuous review compliance — as a folder in your repo."
+name = "ready"
+version = "0.2.0"
+description = "Know before you ship — continuous readiness as a folder in your repo."
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"

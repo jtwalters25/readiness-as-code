@@ -1,0 +1,202 @@
+{
+  "service_name": "readiness-as-code",
+  "scan_time": "2026-04-04T08:39:46.388231+00:00",
+  "summary": {
+    "total": 12,
+    "passing": 8,
+    "failing_red": 0,
+    "failing_yellow": 0,
+    "exceptions": 0,
+    "skipped": 4,
+    "readiness_pct": 100.0
+  },
+  "results": [
+    {
+      "checkpoint_id": "gen-001",
+      "title": "README exists",
+      "status": "pass",
+      "severity": "red",
+      "type": "code",
+      "confidence": "verified",
+      "evidence": [
+        "README.md"
+      ],
+      "message": "Passing",
+      "fix_hint": "Create a README.md in the repo root with sections: Purpose, Setup, Usage, Contributing.",
+      "doc_link": "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes",
+      "guideline": "Universal Engineering Standards",
+      "guideline_section": "1.1 \u2014 Documentation"
+    },
+    {
+      "checkpoint_id": "gen-002",
+      "title": "License file exists",
+      "status": "pass",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "verified",
+      "evidence": [
+        "LICENSE"
+      ],
+      "message": "Passing",
+      "fix_hint": "Add a LICENSE file. Use https://choosealicense.com/ to pick one.",
+      "doc_link": "https://choosealicense.com/",
+      "guideline": "Universal Engineering Standards",
+      "guideline_section": "1.2 \u2014 Legal"
+    },
+    {
+      "checkpoint_id": "gen-003",
+      "title": "CI pipeline configured",
+      "status": "pass",
+      "severity": "red",
+      "type": "code",
+      "confidence": "verified",
+      "evidence": [
+        ".github/workflows/publish.yml",
+        ".github/workflows/readiness.yml"
+      ],
+      "message": "Passing",
+      "fix_hint": "Add a CI pipeline. See templates/ in readiness-as-code for GitHub Actions, Azure Pipelines, and GitLab CI examples.",
+      "doc_link": "",
+      "guideline": "Universal Engineering Standards",
+      "guideline_section": "2.1 \u2014 Continuous Integration"
+    },
+    {
+      "checkpoint_id": "gen-004",
+      "title": "Tests exist",
+      "status": "pass",
+      "severity": "red",
+      "type": "code",
+      "confidence": "verified",
+      "evidence": [
+        "tests",
+        "tests/__pycache__",
+        "tests/__pycache__/test_validators.cpython-313-pytest-9.0.2.pyc",
+        "tests/test_validators.py",
+        "tests/test_validators.py"
+      ],
+      "message": "Passing",
+      "fix_hint": "Create a tests/ directory with at least one test file.",
+      "doc_link": "",
+      "guideline": "Universal Engineering Standards",
+      "guideline_section": "2.2 \u2014 Testing"
+    },
+    {
+      "checkpoint_id": "gen-005",
+      "title": "Dependency manifest present",
+      "status": "pass",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "verified",
+      "evidence": [
+        "pyproject.toml"
+      ],
+      "message": "Passing",
+      "fix_hint": "Add a dependency manifest (requirements.txt, package.json, go.mod, etc.).",
+      "doc_link": "",
+      "guideline": "Universal Engineering Standards",
+      "guideline_section": "2.3 \u2014 Dependency Management"
+    },
+    {
+      "checkpoint_id": "gen-006",
+      "title": "No hardcoded AWS keys",
+      "status": "pass",
+      "severity": "red",
+      "type": "code",
+      "confidence": "verified",
+      "evidence": [],
+      "message": "Passing",
+      "fix_hint": "Remove hardcoded AWS keys. Use environment variables, AWS SSO, or a secrets manager. The detected pattern (AKIA...) is a real AWS access key ID.",
+      "doc_link": "",
+      "guideline": "Universal Engineering Standards",
+      "guideline_section": "3.1 \u2014 Secret Management"
+    },
+    {
+      "checkpoint_id": "gen-007",
+      "title": ".gitignore configured",
+      "status": "pass",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "verified",
+      "evidence": [
+        ".gitignore"
+      ],
+      "message": "Passing",
+      "fix_hint": "Add a .gitignore appropriate for your language. See https://github.com/github/gitignore",
+      "doc_link": "",
+      "guideline": "Universal Engineering Standards",
+      "guideline_section": "1.3 \u2014 Repository Hygiene"
+    },
+    {
+      "checkpoint_id": "sec-001",
+      "title": "Security policy exists",
+      "status": "pass",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "verified",
+      "evidence": [
+        "SECURITY.md"
+      ],
+      "message": "Passing",
+      "fix_hint": "Add a SECURITY.md with vulnerability reporting instructions.",
+      "doc_link": "https://docs.github.com/en/code-security/getting-started/adding-a-security-policy-to-your-repository",
+      "guideline": "Universal Engineering Standards",
+      "guideline_section": "3.2 \u2014 Security Disclosure"
+    },
+    {
+      "checkpoint_id": "ops-001",
+      "title": "Health check endpoint",
+      "status": "skip",
+      "severity": "red",
+      "type": "code",
+      "confidence": "verified",
+      "evidence": [],
+      "message": "Not applicable to this service's tags",
+      "fix_hint": "",
+      "doc_link": "",
+      "guideline": "",
+      "guideline_section": ""
+    },
+    {
+      "checkpoint_id": "ops-002",
+      "title": "Dockerfile or container config",
+      "status": "skip",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "verified",
+      "evidence": [],
+      "message": "Not applicable to this service's tags",
+      "fix_hint": "",
+      "doc_link": "",
+      "guideline": "",
+      "guideline_section": ""
+    },
+    {
+      "checkpoint_id": "ext-001",
+      "title": "Monitoring dashboard configured",
+      "status": "skip",
+      "severity": "red",
+      "type": "external",
+      "confidence": "verified",
+      "evidence": [],
+      "message": "Not applicable to this service's tags",
+      "fix_hint": "",
+      "doc_link": "",
+      "guideline": "",
+      "guideline_section": ""
+    },
+    {
+      "checkpoint_id": "ext-002",
+      "title": "On-call / incident registration",
+      "status": "skip",
+      "severity": "red",
+      "type": "external",
+      "confidence": "verified",
+      "evidence": [],
+      "message": "Not applicable to this service's tags",
+      "fix_hint": "",
+      "doc_link": "",
+      "guideline": "",
+      "guideline_section": ""
+    }
+  ]
+}

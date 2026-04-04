@@ -45,7 +45,7 @@ jobs:
         # No API token needed — uses PyPI Trusted Publishing (OIDC).
         # Set up at: https://pypi.org/manage/account/publishing/
         # Publisher settings:
-        #   PyPI project name: readiness-as-code
+        #   PyPI project name: ready
         #   GitHub owner:      jtwalters25
         #   GitHub repo:       readiness-as-code
         #   Workflow file:     publish.yml

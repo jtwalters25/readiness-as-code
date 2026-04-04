@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="Readiness as Code" width="600" />
+  <img src="docs/assets/banner.svg" alt="ready" width="600" />
 </p>
 
 <h3 align="center">
-  Continuous review compliance — as a folder in your repo.
+  Know before you ship.
 </h3>
 
 <p align="center">
@@ -15,9 +15,15 @@
   <a href="#quickstart">Quickstart</a> •
   <a href="docs/getting-started.md">Docs</a> •
   <a href="docs/architecture-and-tradeoffs.md">Architecture</a> •
-  <a href="docs/checkpoint-authoring.md">Authoring</a> •
   <a href="docs/verification-types.md">Verification Types</a> •
   <a href="docs/ci-integration.md">CI Integration</a>
+</p>
+
+<p align="center">
+  <a href=".readiness/review-baseline.json">
+    <img src="https://img.shields.io/badge/ready-100%25-brightgreen" alt="ready: 100%" />
+  </a>
+  <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License" />
 </p>
 
 ---
@@ -26,7 +32,7 @@
 
 Most teams perform engineering, security, and operational reviews at a point in time. The moment the review ends, readiness begins to drift. Changes ship, telemetry gets removed, configs shift, exception handling gets altered — and nobody notices until an incident.
 
-This project treats readiness as a **continuously evaluated property**: review criteria are expressed as code, exceptions are explicit and time-bound, drift is detected automatically, and human judgment is preserved but made visible.
+**ready** treats readiness as a continuously evaluated property: review criteria are expressed as code, exceptions are explicit and time-bound, drift is detected automatically, and human judgment is preserved but made visible.
 
 It replaces **prep work**, not judgment.
 
@@ -44,34 +50,31 @@ It replaces **prep work**, not judgment.
 ## Quickstart
 
 ```bash
-pip install readiness-as-code
+pip install ready
 
 cd your-repo
-ready init          # scaffolds .readiness/ with starter checks
-ready scan          # see your score instantly
+ready scan
 ```
 
 ```
-ready? — your-service
-Readiness: 80%  (8/10 passing)
+ready? — your-service   80%   1 blocking · 2 warnings
 
-🔴 RED — cannot ship (1)
-   ✗ [gen-006] No secrets in code
-     evidence: src/config.py:14
+  ✗ No secrets in code
+    src/config.py:14
+    → Remove hardcoded keys. Use environment variables or a secrets manager.
 
-🟡 YELLOW — fix before launch (1)
-   ○ [sec-001] Security policy exists
-
-🟢 8 checks passing
+  + 2 warnings   (ready scan --verbose)
 ```
 
-Three commands. No config files. No accounts. No dashboards to deploy.
+**No config. No accounts. No init required.** `ready scan` auto-detects your project type and runs immediately. When you're ready to customize, run `ready init`.
 
-## Architecture
+When everything is passing:
 
-<p align="center">
-  <img src="docs/assets/architecture.svg" alt="readiness-as-code architecture" width="860" />
-</p>
+```
+ready? — your-service   100%   ✓   ▲ +12%
+```
+
+One line. The drift indicator appears automatically whenever a committed baseline exists.
 
 ## How It Works
 
@@ -98,9 +101,9 @@ Three commands. No config files. No accounts. No dashboards to deploy.
                     ┌────────────────────┬┴──────────────────┐
                     ▼                    ▼                    ▼
              Terminal Output      Work Item Tracking    Cross-Repo Heatmap
-             (Red/Yellow/Green)   (closed-loop:         (aggregate baselines
-              + exit code for      regression &          across services →
-              CI gating)           staleness detection)   systemic patterns)
+             (single line +       (closed-loop:         (aggregate baselines
+              blocking items       regression &           across services →
+              + CI exit code)      staleness detection)   systemic patterns)
 ```
 
 ## The Entire System
@@ -116,19 +119,46 @@ your-repo/
 
 Four JSON files and a scanner. That's it.
 
+## Checkpoint Packs
+
+Start with a curated pack, then customize:
+
+```bash
+ready init                              # Universal starter (default)
+ready init --pack web-api               # REST/HTTP API checks
+ready init --pack security-baseline     # Secrets, dependency hygiene, security policy
+ready init --pack observability-baseline # Logging, tracing, metrics, dashboards
+ready init --list-packs                 # Show all available packs
+```
+
+| Pack | Checks | Best for |
+|------|--------|----------|
+| `starter` | 11 universal | Any repo |
+| `web-api` | 17 API-specific | REST/HTTP services |
+| `security-baseline` | 8 security | Any repo with sensitive data |
+| `observability-baseline` | 8 observability | Production services |
+
 ## Key Capabilities
+
+**Zero-config first run.** `ready scan` works immediately — no init, no config files. It auto-detects your project type and runs the most appropriate pack. Get your first score in under 15 seconds.
+
+**Score-first output.** Default output is a single line. Blocking items appear below it with fix hints. Everything else is collapsed — run `--verbose` when you want the full picture.
+
+**Auto-drift detection.** If a committed baseline exists, every scan shows a delta automatically: `▲ +12%` or `▼ -5%`. No flags, no extra commands.
 
 **Three verification types.** Code checks scan your repo automatically. External checks track human attestations for artifacts outside the repo (dashboards, registrations, sign-offs). Hybrid checks require both. → [Details](docs/verification-types.md)
 
 **Closed-loop work item tracking.** Gaps become tracked work items (GitHub Issues, Azure DevOps, Jira). If a ticket is closed but the code still fails → flagged as **regression**. If code is fixed but the ticket is still open → flagged as **stale**.
 
-**Cross-repo aggregation.** Run `ready aggregate` across multiple baselines. *"Telemetry gaps in 4 of 5 services"* — that's a platform problem, not a team problem. Individual audits become organizational intelligence.
+**Cross-repo aggregation.** Run `ready aggregate` across multiple baselines. *"Telemetry gaps in 4 of 5 services"* — that's a platform problem, not a team problem.
 
-**Expiring accepted risks.** Teams can acknowledge known gaps with justification and an expiry date. The scanner respects them — then re-flags when the expiry passes. No more permanent dismissals.
+**Expiring accepted risks.** Teams can acknowledge known gaps with justification and an expiry date. The scanner respects them — then re-flags when the expiry passes.
 
-**AI-assisted checkpoint authoring.** Don't write JSON by hand. Feed your guideline doc to any AI using the included skills. It proposes checkpoint definitions; you review and approve. Works with Claude, ChatGPT, Copilot, Cursor, or any model. → [Details](docs/checkpoint-authoring.md)
+**AI-assisted checkpoint authoring.** `ready author --from guidelines.md` generates a ready-to-paste prompt combining your guideline document with authoring instructions. Paste it into any AI to generate checkpoint definitions. Works with Claude, ChatGPT, Copilot, Cursor, or any model.
 
-**CI gating on every PR.** The scanner exits non-zero on red failures. Drop the included template into GitHub Actions, Azure Pipelines, or GitLab CI. Teams can't accidentally drift from what was reviewed. → [Details](docs/ci-integration.md)
+**README badge.** `ready badge` generates a shields.io badge reflecting your committed readiness score. Paste it into your README.
+
+**CI gating on every PR.** The scanner exits non-zero on red failures. Drop the included template into GitHub Actions, Azure Pipelines, or GitLab CI. → [Details](docs/ci-integration.md)
 
 ## Who This Is For
 
@@ -148,25 +178,43 @@ Four JSON files and a scanner. That's it.
 ## Commands
 
 ```bash
-ready init                     # Scaffold .readiness/ directory
-ready scan                     # Red/Yellow/Green scan
-ready scan --verbose           # Full detail with fix hints
-ready scan --calibrate         # Report-only (no exit code failure)
-ready scan --json              # Machine-readable output
-ready scan --baseline FILE     # Write baseline snapshot
-ready items --create           # Propose + create work items (human approves each)
-ready items --verify           # Cross-check work items vs code
-ready aggregate PATHS...       # Cross-repo heatmap from multiple baselines
+# Scanning
+ready scan                             # Score + blocking items
+ready scan --verbose                   # Full detail — all checks, evidence, fix hints
+ready scan --calibrate                 # Report-only (no exit code failure)
+ready scan --json                      # Machine-readable output
+ready scan --baseline FILE             # Write baseline snapshot (enables drift tracking)
+ready scan --suggest-tuning            # Show pattern tuning suggestions after scan
+
+# Setup
+ready init                             # Scaffold .readiness/ with starter pack
+ready init --pack web-api              # Scaffold with a specific pack
+ready init --list-packs                # List available packs
+
+# Authoring
+ready author --from FILE               # Generate AI prompt from a guideline document
+
+# Audit trail
+ready badge                            # Generate README badge from current score
+ready decisions                        # Show all active, expiring, and expired exceptions
+ready history [BASELINES...]           # Show readiness trend from baseline snapshots
+
+# Work items
+ready items --create                   # Propose + create work items (human approves each)
+ready items --verify                   # Cross-check work items vs code
+
+# Cross-repo
+ready aggregate PATHS...               # Cross-repo heatmap from multiple baselines
 ```
 
 ## AI Integration
 
 ### MCP Server (Claude, Cursor, Copilot, any MCP client)
 
-readiness-as-code ships a [Model Context Protocol](https://modelcontextprotocol.io) server so any AI assistant can run scans, inspect checkpoints, and aggregate results — no CLI required.
+ready ships a [Model Context Protocol](https://modelcontextprotocol.io) server so any AI assistant can run scans, inspect checkpoints, and aggregate results — no CLI required.
 
 ```bash
-pip install "readiness-as-code[mcp]"
+pip install "ready[mcp]"
 ready-mcp    # starts the MCP server on stdio
 ```
 
@@ -174,26 +222,25 @@ Configure your AI tool to launch `ready-mcp` and it gains four tools:
 
 | Tool | Description |
 |------|-------------|
-| `scan_repo` | Full readiness scan with Red/Yellow/Green results |
+| `scan_repo` | Full readiness scan with results |
 | `list_checkpoints` | View all checkpoint definitions |
-| `explain_checkpoint` | Deep-dive on a specific check (great after a failure) |
+| `explain_checkpoint` | Deep-dive on a specific check |
 | `aggregate_baselines` | Cross-repo heatmap for systemic gap detection |
 
 **→ [Setup instructions for Claude Desktop, Cursor, VS Code, and more](mcp/README.md)**
 
 ### AI Skills (prompt-based, any model)
 
-For AI tools without MCP support, use the prompt skills in `ai-skills/`:
+For deeper AI-assisted authoring, use `ready author` or the prompt skills in `ai-skills/`:
 
-```
-# Claude / Claude Code
-Read ai-skills/author-checkpoints.instructions.md and generate checkpoints from docs/ops-review.md
+```bash
+# Generate a checkpoint prompt from a guideline document
+ready author --from docs/ops-review.md
 
-# Cursor
-@ai-skills/scan.instructions.md  →  Scan this repo for readiness
-
-# GitHub Copilot
-#file:ai-skills/author-checkpoints.instructions.md
+# Then paste author-prompt.md into any AI:
+# Claude:   "Read author-prompt.md and generate checkpoint definitions"
+# Cursor:   @author-prompt.md
+# Copilot:  #file:author-prompt.md
 ```
 
 Works with Claude, ChatGPT, Copilot, Cursor, Gemini — any model that can read a file.
@@ -205,6 +252,7 @@ Works with Claude, ChatGPT, Copilot, Cursor, Gemini — any model that can read 
 3. **Portable, not hosted.** Files in your repo. No infrastructure.
 4. **Evidence-backed, not trust-based.** Every assertion has a file path, attestation, or work item.
 5. **Expiring, not permanent.** Accepted risks have expiry dates. Nothing is forever.
+6. **Score-first, not report-first.** The answer to "are we ready?" is one line. Detail is on demand.
 
 ## Contributing
 

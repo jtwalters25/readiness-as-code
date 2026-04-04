@@ -1,10 +1,10 @@
 # Architecture & Tradeoffs
 
 <p align="center">
-  <img src="assets/architecture.svg" alt="readiness-as-code architecture" width="860" />
+  <img src="assets/architecture.svg" alt="ready architecture" width="860" />
 </p>
 
-This document explains the key design decisions in readiness-as-code, what alternatives were considered, and why specific tradeoffs were made. It's written for engineers evaluating whether this system fits their organization, and for anyone interested in the thinking behind the design.
+This document explains the key design decisions in **ready**, what alternatives were considered, and why specific tradeoffs were made. It's written for engineers evaluating whether this system fits their organization, and for anyone interested in the thinking behind the design.
 
 ## Core Architectural Decision: Files, Not Infrastructure
 
@@ -84,13 +84,64 @@ When multiple services use the same checkpoint definitions, their baselines can 
 
 **Tradeoff:** Aggregation assumes comparable definitions. Services with different review scopes or risk profiles should use different checkpoint packs, and the aggregator should group by `applicable_tags` to avoid misleading comparisons. We chose simplicity (compare all baselines) as the default, with tag-based grouping as an advanced feature.
 
+## Zero-Config First Run: Value Before Setup
+
+`ready scan` works with no `.readiness/` directory. If no configuration is present, the scanner auto-detects the project type (Node.js, Python, Go) by inspecting files in the repo root, selects the most appropriate built-in pack, and runs immediately without touching the filesystem.
+
+**Why:** The adoption barrier for any tool is highest in the first five minutes. Requiring `ready init` before getting a score adds a step that loses users before they've seen the value. Zero-config inverts this — the first command produces a real result, and configuration is the next step for teams who want to customize.
+
+**Tradeoff:** Auto-detection is heuristic. It checks for web framework references in `package.json`, `pyproject.toml`, and `go.mod`, but falls back to the `starter` pack for unfamiliar stacks. The result is a useful-but-approximate first scan, not a perfectly calibrated one. The call to action after the first scan is `ready init` — which is now motivated by a real score rather than a blank slate.
+
+## Checkpoint Packs: Curated Starting Points
+
+Built-in packs replace the blank-slate onboarding problem. Instead of `ready init` scaffolding an empty or minimal `checkpoint-definitions.json`, teams choose from:
+
+- **starter** — 11 universal checks (docs, CI, testing, secrets, ops basics)
+- **web-api** — 17 API-specific checks (auth, rate limiting, error handling, logging, resilience)
+- **security-baseline** — 8 security checks (hardcoded secrets, private keys, .env files, lock file, SECURITY.md)
+- **observability-baseline** — 8 observability checks (logging, tracing, metrics, dashboards, on-call)
+
+**Why:** A thin starter pack means every team builds their checkpoint library from scratch. Curated packs give teams a working baseline in seconds, with the right checks for their context. The first scan produces a meaningful score rather than a placeholder.
+
+**Tradeoff:** Built-in packs are opinionated. A team whose security posture exceeds the `security-baseline` pack will find it too easy; a team with exotic requirements may find it incomplete. Packs are starting points, not complete definitions — the expectation is that teams customize from there.
+
+## Score-First Output: The Answer Before the Report
+
+The default output of `ready scan` is a single line:
+
+```
+ready? — your-service   85%   1 blocking · 2 warnings
+```
+
+Blocking items (RED failures) are shown below with the first piece of evidence and a fix hint. Everything else — warnings, exceptions, passing checks — is collapsed and available via `--verbose`.
+
+**Why:** The question teams are asking is *"are we ready?"* — not *"show me everything."* Output that leads with the answer and hides the detail respects the user's attention. Teams who are passing should get confirmation in one line. Teams who are failing should see exactly what to fix, nothing more.
+
+**Tradeoff:** Collapsed output means users need `--verbose` to see warnings and exceptions. Teams managing a large exception list or many yellow failures will use `--verbose` frequently. This is acceptable — verbose mode is one flag, and the default should serve the majority of runs (CI pipelines, quick status checks) not the debugging case.
+
+## Auto-Drift Detection: History Without Commands
+
+If a committed baseline (`review-baseline.json`) exists in `.readiness/`, every scan automatically compares the current score to it and shows the delta on the summary line:
+
+```
+ready? — your-service   85%   ✓   ▲ +12%
+```
+
+No flags. No extra commands. The drift is always visible.
+
+**Why:** Drift is the primary failure mode this tool exists to prevent. If detecting drift requires a separate command or an explicit comparison flag, most users won't do it consistently. Surfacing the delta automatically on every scan means teams see it on every PR, every CI run, every terminal check — without thinking about it.
+
+**Tradeoff:** The comparison is against the last *committed* baseline, not the last scan. This is intentional — committed baselines represent reviewed, stable states. Comparing against an uncommitted baseline would show noise from in-progress work. The committed-baseline model also gives teams control over when the "last known good" state is updated.
+
 ## LLM-Assisted Authoring: Not Detection
 
-The LLM skill helps *author* checkpoint definitions from guideline documents. It does not replace the deterministic scanner for detection.
+The `ready author --from FILE` command and the AI skill in `ai-skills/` help *author* checkpoint definitions from guideline documents. They do not replace the deterministic scanner for detection.
 
 **Why this separation matters:** Deterministic checks are reproducible, auditable, and fast. LLM evaluations are non-deterministic, expensive, and hard to audit. Using an LLM at authoring time (human reviews the output) gives you the productivity benefit without the reliability risk. The human remains in the loop for what matters: deciding what to check and whether the check is correct.
 
-**Where LLM detection is appropriate:** The Copilot scan skill allows on-demand LLM evaluation for nuanced checks the scanner can't handle (documentation quality, architecture alignment, test coverage depth). These are explicitly labeled as "LLM assessments" with confidence levels, not mixed into the deterministic results.
+**`ready author` design:** The command reads a guideline document and the authoring skill instructions, combines them into a single ready-to-paste prompt file, and prints copy-paste instructions for every major AI tool. No API keys, no external calls — it produces a file the user pastes wherever they work. This preserves the no-infrastructure principle while making the authoring workflow one command.
+
+**Where LLM detection is appropriate:** The AI scan skill allows on-demand LLM evaluation for nuanced checks the scanner can't handle (documentation quality, architecture alignment, test coverage depth). These are explicitly labeled as "LLM assessments" with confidence levels, not mixed into the deterministic results.
 
 ## What This System Cannot Do
 

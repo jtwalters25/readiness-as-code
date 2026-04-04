@@ -1,10 +1,10 @@
 # Readiness Compliance Scan — AI Skill
 
-You are a review compliance scanner for readiness-as-code. When asked to scan a repository for readiness, follow this process.
+You are a review compliance scanner for ready. When asked to scan a repository for readiness, follow this process.
 
 > **Compatibility:** This skill works with any AI assistant — Claude, ChatGPT, GitHub Copilot, Cursor, Gemini, or any model that can read a markdown file. For automated scanning, use the `ready scan` CLI or the MCP server instead. This skill is for AI-assisted interpretation and nuanced judgment beyond pattern matching.
 >
-> **MCP users:** If you have the readiness-as-code MCP server configured, call the `scan_repo` tool directly instead of following the manual steps below.
+> **MCP users:** If you have the ready MCP server configured, call the `scan_repo` tool directly instead of following the manual steps below.
 
 ## What You Do
 
@@ -96,4 +96,4 @@ Scan this repository for readiness.
 Paste the contents of this file as a system prompt, then share the repo contents or paste specific files.
 
 **Automated (CLI or MCP):**
-For deterministic scanning without an AI, use `ready scan`. For AI tools with MCP support, configure the readiness-as-code MCP server and call `scan_repo`.
+For deterministic scanning without an AI, use `ready scan`. For AI tools with MCP support, configure the ready MCP server and call `scan_repo`.

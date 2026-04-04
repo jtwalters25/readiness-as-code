@@ -1,4 +1,4 @@
-# readiness-as-code — Azure Pipelines template
+# ready — Azure Pipelines template
 #
 # Add this as a stage in your pipeline or reference as a template.
 
@@ -27,8 +27,8 @@ stages:
             inputs:
               versionSpec: ${{ parameters.pythonVersion }}
 
-          - script: pip install readiness-as-code
-            displayName: 'Install readiness-as-code'
+          - script: pip install ready
+            displayName: 'Install ready'
 
           - script: |
               if [ "${{ parameters.mode }}" = "calibrate" ]; then

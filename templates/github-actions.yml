@@ -1,4 +1,4 @@
-# readiness-as-code — GitHub Actions template
+# ready — GitHub Actions template
 #
 # Copy this into your repo at .github/workflows/readiness.yml
 # Runs readiness scan on PRs (gating) and weekly (monitoring).
@@ -27,8 +27,8 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install readiness-as-code
-        run: pip install readiness-as-code
+      - name: Install ready
+        run: pip install ready
 
       - name: Run readiness scan
         run: ready scan --verbose --baseline .readiness/review-baseline.json

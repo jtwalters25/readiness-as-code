@@ -4,7 +4,7 @@
     "guideline_name": "Universal Engineering Standards",
     "guideline_version": "1.0",
     "last_updated": "2026-04-01",
-    "author": "readiness-as-code starter pack"
+    "author": "ready starter pack"
   },
   "checkpoints": [
 
@@ -58,7 +58,7 @@
         "min_matches": 1
       },
       "applicable_tags": [],
-      "fix_hint": "Add a CI pipeline. See templates/ in readiness-as-code for GitHub Actions, Azure Pipelines, and GitLab CI examples."
+      "fix_hint": "Add a CI pipeline. See templates/ in the ready repo for GitHub Actions, Azure Pipelines, and GitLab CI examples."
     },
 
     {

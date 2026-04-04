@@ -1,0 +1,177 @@
+{
+  "version": "1.0",
+  "metadata": {
+    "guideline_name": "Security Baseline",
+    "guideline_version": "1.0",
+    "last_updated": "2026-04-04",
+    "author": "ready security-baseline pack"
+  },
+  "checkpoints": [
+
+    {
+      "id": "sec-010",
+      "title": "No hardcoded passwords",
+      "description": "Source code must not contain hardcoded passwords assigned to variables. This pattern catches common assignment forms across languages.",
+      "guideline": "Security Baseline",
+      "guideline_section": "1.1 — Secret Management",
+      "severity": "red",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "(?i)(password|passwd|pwd)\\s*[=:]\\s*[\"'][^\"']{4,}[\"']",
+        "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**,server/**,api/**,config/**}/*.{py,js,ts,go,cs,java,rb,php,yaml,yml,toml,cfg,ini,env}",
+        "min_matches": 0,
+        "confidence": "likely"
+      },
+      "applicable_tags": [],
+      "fix_hint": "Remove hardcoded passwords. Use environment variables (os.environ, process.env) or a secrets manager (AWS Secrets Manager, Azure Key Vault, HashiCorp Vault).",
+      "doc_link": "https://owasp.org/www-community/vulnerabilities/Use_of_hard-coded_password"
+    },
+
+    {
+      "id": "sec-011",
+      "title": "No hardcoded API keys or tokens",
+      "description": "Source code must not contain hardcoded API keys or tokens assigned inline. This pattern catches common assignment forms.",
+      "guideline": "Security Baseline",
+      "guideline_section": "1.1 — Secret Management",
+      "severity": "red",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "(?i)(api[_-]?key|api[_-]?token|access[_-]?token|auth[_-]?token|secret[_-]?key)\\s*[=:]\\s*[\"'][A-Za-z0-9_\\-\\.]{8,}[\"']",
+        "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**,server/**,api/**,config/**}/*.{py,js,ts,go,cs,java,rb,php,yaml,yml,toml,cfg,ini}",
+        "min_matches": 0,
+        "confidence": "likely"
+      },
+      "applicable_tags": [],
+      "fix_hint": "Remove hardcoded API keys. Store them in environment variables or a secrets manager and reference them at runtime."
+    },
+
+    {
+      "id": "sec-012",
+      "title": "No hardcoded AWS access keys",
+      "description": "Repository must not contain hardcoded AWS access key IDs. The AKIA prefix is unique to AWS access keys — this check produces virtually zero false positives.",
+      "guideline": "Security Baseline",
+      "guideline_section": "1.1 — Secret Management",
+      "severity": "red",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "AKIA[0-9A-Z]{16}",
+        "target": "{src/**,lib/**,app/**,cmd/**,pkg/**,internal/**,config/**}/*.{py,js,ts,go,cs,java,rb,yaml,yml,json,env,toml,cfg}",
+        "min_matches": 0,
+        "confidence": "verified"
+      },
+      "applicable_tags": [],
+      "fix_hint": "Remove hardcoded AWS keys immediately — they may already be compromised. Use IAM roles, AWS SSO, or environment variables. Rotate the key in the AWS console.",
+      "doc_link": "https://docs.aws.amazon.com/general/latest/gr/aws-access-keys-best-practices.html"
+    },
+
+    {
+      "id": "sec-013",
+      "title": "No private key files committed",
+      "description": "Private key files (PEM, key, cert) must not be committed to the repository.",
+      "guideline": "Security Baseline",
+      "guideline_section": "1.2 — Credential Hygiene",
+      "severity": "red",
+      "type": "code",
+      "verification": {
+        "method": "glob",
+        "pattern": "{**/*.pem,**/*.key,**/id_rsa,**/id_dsa,**/id_ecdsa,**/id_ed25519,**/*.p12,**/*.pfx,**/*.jks}",
+        "min_matches": 0
+      },
+      "applicable_tags": [],
+      "fix_hint": "Remove private key files from the repository. Add *.pem, *.key, id_rsa to .gitignore. If already committed, rotate the keys — they are compromised."
+    },
+
+    {
+      "id": "sec-014",
+      "title": "No .env files committed",
+      "description": ".env files commonly contain secrets and must not be committed. They should be in .gitignore and provided at deploy time.",
+      "guideline": "Security Baseline",
+      "guideline_section": "1.2 — Credential Hygiene",
+      "severity": "red",
+      "type": "code",
+      "verification": {
+        "method": "glob",
+        "pattern": "{.env,.env.local,.env.production,.env.staging,.env.development}",
+        "min_matches": 0
+      },
+      "applicable_tags": [],
+      "fix_hint": "Remove .env files from the repository and add them to .gitignore. Provide a .env.example with placeholder values for documentation. If already committed, rotate any secrets they contained."
+    },
+
+    {
+      "id": "sec-015",
+      "title": "Dependency lock file exists",
+      "description": "A dependency lock file pins transitive dependency versions, preventing supply chain attacks from malicious version updates.",
+      "guideline": "Security Baseline",
+      "guideline_section": "2.1 — Dependency Integrity",
+      "severity": "yellow",
+      "type": "code",
+      "verification": {
+        "method": "glob",
+        "pattern": "{package-lock.json,yarn.lock,pnpm-lock.yaml,poetry.lock,Pipfile.lock,go.sum,Gemfile.lock,composer.lock,Cargo.lock,packages.lock.json}",
+        "min_matches": 1
+      },
+      "applicable_tags": [],
+      "fix_hint": "Commit your dependency lock file. Run 'npm install', 'poetry lock', 'go mod tidy', etc. to generate it.",
+      "doc_link": "https://docs.npmjs.com/cli/v10/configuring-npm/package-lock-json"
+    },
+
+    {
+      "id": "sec-016",
+      "title": ".gitignore covers secrets",
+      "description": ".gitignore should contain patterns covering common secret files to prevent accidental commits.",
+      "guideline": "Security Baseline",
+      "guideline_section": "1.2 — Credential Hygiene",
+      "severity": "yellow",
+      "type": "code",
+      "verification": {
+        "method": "grep",
+        "pattern": "(\\.env|\\*\\.pem|\\*\\.key|id_rsa|secrets|credentials)",
+        "target": ".gitignore",
+        "min_matches": 1,
+        "confidence": "likely"
+      },
+      "applicable_tags": [],
+      "fix_hint": "Add secret file patterns to .gitignore: .env, *.pem, *.key, id_rsa, secrets/, credentials.json",
+      "doc_link": "https://github.com/github/gitignore"
+    },
+
+    {
+      "id": "sec-017",
+      "title": "SECURITY.md exists",
+      "description": "Repository should have a SECURITY.md describing how to report vulnerabilities responsibly.",
+      "guideline": "Security Baseline",
+      "guideline_section": "3.1 — Vulnerability Disclosure",
+      "severity": "yellow",
+      "type": "code",
+      "verification": {
+        "method": "glob",
+        "pattern": "{SECURITY.md,.github/SECURITY.md}",
+        "min_matches": 1
+      },
+      "applicable_tags": [],
+      "fix_hint": "Add a SECURITY.md with a contact method for reporting vulnerabilities (e.g., security@yourorg.com or a private issue template).",
+      "doc_link": "https://docs.github.com/en/code-security/getting-started/adding-a-security-policy-to-your-repository"
+    },
+
+    {
+      "id": "sec-018",
+      "title": "Security review attestation",
+      "description": "Service should have undergone a security review before launch. This attestation confirms the review occurred.",
+      "guideline": "Security Baseline",
+      "guideline_section": "3.2 — Review Sign-off",
+      "severity": "yellow",
+      "type": "external",
+      "verification": {
+        "method": "external_attestation",
+        "attestation_key": "security_review"
+      },
+      "applicable_tags": ["web-api", "web-service", "background-service"],
+      "fix_hint": "Complete a security review and attest in .readiness/external-evidence.json with attestation_key 'security_review', the reviewer's identity, and a link to the review document or ticket."
+    }
+
+  ]
+}

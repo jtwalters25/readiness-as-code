@@ -1,6 +1,6 @@
 # Connecting AI Tools via MCP
 
-The readiness-as-code MCP server exposes four tools any MCP-compatible AI can call:
+The ready MCP server exposes four tools any MCP-compatible AI can call:
 
 | Tool | What it does |
 |------|-------------|
@@ -12,7 +12,7 @@ The readiness-as-code MCP server exposes four tools any MCP-compatible AI can ca
 ## Install
 
 ```bash
-pip install "readiness-as-code[mcp]"
+pip install "ready[mcp]"
 ```
 
 Or from source:
@@ -35,7 +35,7 @@ or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 ```json
 {
   "mcpServers": {
-    "readiness-as-code": {
+    "ready": {
       "command": "ready-mcp"
     }
   }
@@ -53,7 +53,7 @@ Create or edit `.cursor/mcp.json` in your project:
 ```json
 {
   "mcpServers": {
-    "readiness-as-code": {
+    "ready": {
       "command": "ready-mcp"
     }
   }
@@ -71,7 +71,7 @@ Add to your VS Code `settings.json`:
 ```json
 {
   "mcp.servers": {
-    "readiness-as-code": {
+    "ready": {
       "command": "ready-mcp",
       "args": []
     }
@@ -88,7 +88,7 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 ```json
 {
   "mcpServers": {
-    "readiness-as-code": {
+    "ready": {
       "command": "ready-mcp"
     }
   }

@@ -1,5 +1,5 @@
 """
-Jira adapter for readiness-as-code work item tracking.
+Jira adapter for ready work item tracking.
 
 Requires environment variables:
     JIRA_URL        Base URL of your Jira instance, e.g. https://your-org.atlassian.net

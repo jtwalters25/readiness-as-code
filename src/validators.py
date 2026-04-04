@@ -1,5 +1,5 @@
 """
-Deterministic scan engine for readiness-as-code.
+Deterministic scan engine for ready.
 
 Evaluates checkpoint definitions against a codebase and produces
 structured results with pass/fail, evidence, and confidence levels.
