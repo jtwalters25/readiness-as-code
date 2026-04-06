@@ -1,0 +1,12 @@
+{
+  "name": "ready-widget",
+  "version": "1.0.0",
+  "description": "ADO dashboard widget for readiness-as-code scores",
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "vss-web-extension-sdk": "^5.141.0",
+    "typescript": "^5.0.0"
+  }
+}

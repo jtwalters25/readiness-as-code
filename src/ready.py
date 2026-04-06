@@ -9,6 +9,7 @@ Usage:
     ready scan --json              Machine-readable output
     ready scan --baseline FILE     Write baseline snapshot
     ready scan --suggest-tuning    Show checkpoint tuning suggestions after scan
+    ready doctor                   Diagnose setup — validate config, JSON files, CI, adapters
     ready init                     Scaffold .readiness/ directory
     ready init --pack NAME         Use a specific checkpoint pack
     ready init --list-packs        List available checkpoint packs
@@ -228,6 +229,297 @@ def cmd_init(args):
     return 0
 
 
+VALID_SEVERITIES = {"red", "yellow"}
+VALID_TYPES = {"code", "external", "hybrid"}
+VALID_METHODS = {"file_exists", "glob", "grep", "grep_count", "file_count", "json_path", "external_attestation", "hybrid"}
+VALID_CONFIDENCES = {"verified", "likely", "inconclusive"}
+
+
+def _validate_definitions(path: str) -> list[str]:
+    """
+    Validate checkpoint-definitions.json for common mistakes.
+    Returns a list of human-readable error strings (empty = valid).
+    Does not require jsonschema — uses targeted field checks.
+    """
+    errors = []
+
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        return [f"Invalid JSON in {os.path.basename(path)}: {e}"]
+    except IOError as e:
+        return [f"Could not read {os.path.basename(path)}: {e}"]
+
+    if not isinstance(data.get("checkpoints"), list):
+        errors.append("Missing or invalid 'checkpoints' array at top level")
+        return errors
+
+    seen_ids: set[str] = set()
+    for i, cp in enumerate(data["checkpoints"]):
+        loc = f"checkpoint[{i}]"
+        cp_id = cp.get("id", f"<index {i}>")
+        loc = f"[{cp_id}]"
+
+        # Required fields
+        for field in ("id", "title", "severity", "type", "verification"):
+            if field not in cp:
+                errors.append(f"{loc} missing required field '{field}'")
+
+        # Duplicate IDs
+        if cp_id in seen_ids:
+            errors.append(f"{loc} duplicate checkpoint id '{cp_id}'")
+        seen_ids.add(cp_id)
+
+        # severity must be lowercase "red" or "yellow"
+        sev = cp.get("severity", "")
+        if sev and sev not in VALID_SEVERITIES:
+            hint = f" (did you mean '{sev.lower()}'?)" if sev.lower() in VALID_SEVERITIES else ""
+            errors.append(f"{loc} invalid severity '{sev}'{hint} — must be 'red' or 'yellow'")
+
+        # type must be code / external / hybrid
+        cp_type = cp.get("type", "")
+        if cp_type and cp_type not in VALID_TYPES:
+            errors.append(f"{loc} invalid type '{cp_type}' — must be one of: {', '.join(sorted(VALID_TYPES))}")
+
+        # verification block
+        verification = cp.get("verification", {})
+        if isinstance(verification, dict):
+            method = verification.get("method", "")
+            if method and method not in VALID_METHODS:
+                errors.append(
+                    f"{loc} unknown verification method '{method}' — "
+                    f"valid methods: {', '.join(sorted(VALID_METHODS))}"
+                )
+            confidence = verification.get("confidence", "verified")
+            if confidence not in VALID_CONFIDENCES:
+                errors.append(
+                    f"{loc} invalid confidence '{confidence}' — "
+                    f"must be one of: {', '.join(sorted(VALID_CONFIDENCES))}"
+                )
+            # grep with no pattern
+            if method in ("grep", "grep_count") and not verification.get("pattern"):
+                errors.append(f"{loc} method '{method}' requires a 'pattern' field")
+            # file_exists / glob with no pattern
+            if method in ("file_exists", "glob") and not verification.get("pattern"):
+                errors.append(f"{loc} method '{method}' requires a 'pattern' field")
+            # json_path with no target or path
+            if method == "json_path":
+                if not verification.get("target"):
+                    errors.append(f"{loc} method 'json_path' requires a 'target' field")
+                if not verification.get("json_path"):
+                    errors.append(f"{loc} method 'json_path' requires a 'json_path' field")
+
+    return errors
+
+
+def _validate_json_simple(path: str, expected_key: str) -> list[str]:
+    """Validate that a JSON file loads and has the expected top-level key."""
+    errors = []
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        if expected_key not in data:
+            errors.append(f"{os.path.basename(path)} missing '{expected_key}' key")
+    except json.JSONDecodeError as e:
+        errors.append(f"Invalid JSON in {os.path.basename(path)}: {e}")
+    except IOError as e:
+        errors.append(f"Could not read {os.path.basename(path)}: {e}")
+    return errors
+
+
+def cmd_doctor(args):
+    """
+    Diagnose your readiness-as-code setup.
+    Checks JSON file validity, config, CI integration, and optional adapters.
+    """
+    repo_root = find_repo_root()
+    readiness_dir = os.path.join(repo_root, READINESS_DIR)
+
+    all_errors: list[str] = []
+    all_warnings: list[str] = []
+    checks_passed = 0
+
+    def ok(msg: str):
+        nonlocal checks_passed
+        checks_passed += 1
+        print(f"  {GREEN}✓{RESET} {msg}")
+
+    def warn(msg: str):
+        all_warnings.append(msg)
+        print(f"  {YELLOW}⚠{RESET} {msg}")
+
+    def fail(msg: str):
+        all_errors.append(msg)
+        print(f"  {RED}✗{RESET} {msg}")
+
+    def section(title: str):
+        print(f"\n{BOLD}{title}{RESET}")
+
+    print(f"\n{BOLD}ready doctor — {repo_root}{RESET}")
+
+    # ── Python version ──────────────────────────────────────────────────────
+    section("Python")
+    major, minor = sys.version_info[:2]
+    if (major, minor) >= (3, 10):
+        ok(f"Python {major}.{minor} (>= 3.10 required)")
+    else:
+        fail(f"Python {major}.{minor} — requires 3.10+. Upgrade your Python.")
+
+    # ── .readiness/ directory ───────────────────────────────────────────────
+    section(".readiness/")
+    if not os.path.isdir(readiness_dir):
+        fail(f"No .readiness/ directory found")
+        print(f"\n  {CYAN}→ Run 'ready init' to scaffold one.{RESET}\n")
+        # Can't check anything else
+        _print_doctor_summary(checks_passed, all_errors, all_warnings)
+        return 1 if all_errors else 0
+
+    ok(".readiness/ exists")
+
+    # checkpoint-definitions.json
+    definitions_path = os.path.join(readiness_dir, DEFINITIONS_FILE)
+    if not os.path.isfile(definitions_path):
+        fail(f"Missing {DEFINITIONS_FILE}")
+        print(f"    {CYAN}→ Run 'ready init' to recreate it.{RESET}")
+    else:
+        errs = _validate_definitions(definitions_path)
+        if errs:
+            for e in errs:
+                fail(f"{DEFINITIONS_FILE}: {e}")
+        else:
+            try:
+                with open(definitions_path) as f:
+                    count = len(json.load(f).get("checkpoints", []))
+                ok(f"{DEFINITIONS_FILE} valid ({count} checkpoints)")
+            except Exception:
+                ok(f"{DEFINITIONS_FILE} valid")
+
+    # exceptions.json
+    exceptions_path = os.path.join(readiness_dir, EXCEPTIONS_FILE)
+    if os.path.isfile(exceptions_path):
+        errs = _validate_json_simple(exceptions_path, "exceptions")
+        if errs:
+            for e in errs:
+                fail(f"{EXCEPTIONS_FILE}: {e}")
+        else:
+            with open(exceptions_path) as f:
+                count = len(json.load(f).get("exceptions", []))
+            ok(f"{EXCEPTIONS_FILE} valid ({count} exceptions)")
+    else:
+        warn(f"{EXCEPTIONS_FILE} not found — that's fine if you have no accepted risks")
+
+    # external-evidence.json
+    evidence_path = os.path.join(readiness_dir, EVIDENCE_FILE)
+    if os.path.isfile(evidence_path):
+        errs = _validate_json_simple(evidence_path, "attestations")
+        if errs:
+            for e in errs:
+                fail(f"{EVIDENCE_FILE}: {e}")
+        else:
+            with open(evidence_path) as f:
+                count = len(json.load(f).get("attestations", []))
+            ok(f"{EVIDENCE_FILE} valid ({count} attestations)")
+    else:
+        warn(f"{EVIDENCE_FILE} not found — needed for external/hybrid checkpoints")
+
+    # config.json
+    config_path = os.path.join(readiness_dir, "config.json")
+    if os.path.isfile(config_path):
+        try:
+            with open(config_path) as f:
+                cfg = json.load(f)
+            tags = cfg.get("service_tags", None)
+            name = cfg.get("service_name", "")
+            if tags is None:
+                warn("config.json: 'service_tags' not set — all checks will run regardless of applicable_tags")
+            elif not tags:
+                warn("config.json: 'service_tags' is empty — service-specific checks will be skipped")
+            else:
+                ok(f"config.json valid (service: {name}, tags: {tags})")
+        except (json.JSONDecodeError, IOError) as e:
+            fail(f"config.json: {e}")
+    else:
+        warn("config.json not found — service tags won't be applied")
+
+    # baseline
+    baseline_path = os.path.join(readiness_dir, BASELINE_FILE)
+    if os.path.isfile(baseline_path):
+        ok(f"{BASELINE_FILE} exists (drift detection active)")
+    else:
+        warn(f"No {BASELINE_FILE} — run 'ready scan --baseline .readiness/{BASELINE_FILE}' to enable drift detection")
+
+    # ── CI integration ──────────────────────────────────────────────────────
+    section("CI integration")
+    ci_found = False
+
+    gh_workflows = os.path.join(repo_root, ".github", "workflows")
+    if os.path.isdir(gh_workflows):
+        yamls = [f for f in os.listdir(gh_workflows) if f.endswith((".yml", ".yaml"))]
+        if yamls:
+            ok(f"GitHub Actions: {len(yamls)} workflow(s) in .github/workflows/")
+            ci_found = True
+
+    for ci_file in ("azure-pipelines.yml", ".gitlab-ci.yml", "Jenkinsfile", ".circleci/config.yml"):
+        if os.path.isfile(os.path.join(repo_root, ci_file)):
+            ok(f"CI config found: {ci_file}")
+            ci_found = True
+
+    if not ci_found:
+        warn("No CI configuration found — copy a template from templates/ to enable PR gating")
+
+    # ── Optional adapters ───────────────────────────────────────────────────
+    section("Adapters (optional)")
+    adapter_checks = [
+        ("GitHub Issues",  [("GITHUB_TOKEN", "required"), ("GITHUB_REPOSITORY", "required")]),
+        ("Azure DevOps",   [("AZURE_DEVOPS_ORG", "required"), ("AZURE_DEVOPS_PROJECT", "required"), ("AZURE_DEVOPS_PAT", "required")]),
+        ("Jira",           [("JIRA_URL", "required"), ("JIRA_EMAIL", "required"), ("JIRA_API_TOKEN", "required"), ("JIRA_PROJECT", "required")]),
+    ]
+
+    any_adapter_configured = False
+    for adapter_name, env_vars in adapter_checks:
+        present = [(var, os.environ.get(var)) for var, _ in env_vars]
+        set_vars = [var for var, val in present if val]
+        if set_vars:
+            any_adapter_configured = True
+            missing = [var for var, val in present if not val]
+            if missing:
+                fail(f"{adapter_name}: partially configured — missing {', '.join(missing)}")
+            else:
+                ok(f"{adapter_name}: all required env vars set")
+
+    if not any_adapter_configured:
+        print(f"  {DIM}No adapters configured (GitHub Issues, Azure DevOps, Jira){RESET}")
+        print(f"  {DIM}Set env vars to enable 'ready items' work item tracking.{RESET}")
+
+    # ── MCP server ──────────────────────────────────────────────────────────
+    section("MCP server (optional)")
+    try:
+        import importlib.util
+        if importlib.util.find_spec("mcp") is not None:
+            ok("mcp package installed — ready-mcp server available")
+        else:
+            print(f"  {DIM}mcp not installed — install with: pip install \"ready[mcp]\"{RESET}")
+    except Exception:
+        print(f"  {DIM}Could not check mcp installation{RESET}")
+
+    _print_doctor_summary(checks_passed, all_errors, all_warnings)
+    return 1 if all_errors else 0
+
+
+def _print_doctor_summary(passed: int, errors: list[str], warnings: list[str]) -> None:
+    print()
+    if not errors and not warnings:
+        print(f"{GREEN}✓ Everything looks good. ({passed} checks passed){RESET}")
+    elif not errors:
+        print(f"{YELLOW}⚠ {passed} checks passed, {len(warnings)} warning(s).{RESET}")
+        print(f"{DIM}  Warnings won't break scanning but are worth reviewing.{RESET}")
+    else:
+        print(f"{RED}✗ {len(errors)} error(s) found.{RESET}  {passed} checks passed, {len(warnings)} warning(s).")
+        print(f"{DIM}  Fix errors before running 'ready scan'.{RESET}")
+    print()
+
+
 def cmd_scan(args):
     """Run readiness scan."""
     repo_root = find_repo_root()
@@ -275,14 +567,34 @@ def cmd_scan(args):
             with open(prev_baseline_path) as f:
                 prev_baseline = json.load(f)
 
-    result = run_scan(
-        repo_root=repo_root,
-        definitions_path=definitions_path,
-        evidence_path=evidence_path,
-        exceptions_path=exceptions_path,
-        service_tags=service_tags,
-        service_name=service_name,
-    )
+    # Validate definitions before scanning — catch mistakes with helpful messages
+    if os.path.isfile(definitions_path):
+        validation_errors = _validate_definitions(definitions_path)
+        if validation_errors:
+            print(f"{RED}✗ Invalid checkpoint definitions — fix before scanning:{RESET}\n")
+            for err in validation_errors:
+                print(f"  {RED}•{RESET} {err}")
+            print(f"\n{DIM}Run 'ready doctor' for a full setup check.{RESET}")
+            return 1
+
+    try:
+        result = run_scan(
+            repo_root=repo_root,
+            definitions_path=definitions_path,
+            evidence_path=evidence_path,
+            exceptions_path=exceptions_path,
+            service_tags=service_tags,
+            service_name=service_name,
+        )
+    except json.JSONDecodeError as e:
+        print(f"{RED}✗ JSON parse error in a .readiness/ file:{RESET}")
+        print(f"  {e}")
+        print(f"\n{DIM}Run 'ready doctor' to identify which file has the problem.{RESET}")
+        return 1
+    except Exception as e:
+        print(f"{RED}✗ Scan failed unexpectedly:{RESET} {e}")
+        print(f"\n{DIM}Run 'ready doctor' to check your setup, or 'ready scan --verbose' for more detail.{RESET}")
+        return 1
 
     # JSON output (early return — machine consumers get stable format)
     if args.json:
@@ -1201,6 +1513,9 @@ def main():
         help="Output file for the generated prompt (default: author-prompt.md)",
     )
 
+    # doctor
+    subparsers.add_parser("doctor", help="Diagnose your setup — validate config, JSON files, CI, and adapters")
+
     # badge
     subparsers.add_parser("badge", help="Generate a README badge from the current readiness score")
 
@@ -1233,6 +1548,8 @@ def main():
 
     if args.command == "init":
         sys.exit(cmd_init(args))
+    elif args.command == "doctor":
+        sys.exit(cmd_doctor(args))
     elif args.command == "scan":
         sys.exit(cmd_scan(args))
     elif args.command == "author":

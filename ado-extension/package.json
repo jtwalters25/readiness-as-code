@@ -1,0 +1,16 @@
+{
+  "name": "ready-ado-extension",
+  "version": "1.0.0",
+  "description": "Build tooling for the ready Azure DevOps extension",
+  "scripts": {
+    "install:all": "npm install && cd task && npm install && cd ../widget && npm install",
+    "build": "cd task && npm run build && cd ../widget && npm run build",
+    "clean": "cd task && npm run clean && cd ../widget && rm -f *.js",
+    "package": "tfx extension create --manifest-globs vss-extension.json",
+    "publish-private": "tfx extension publish --manifest-globs vss-extension.json --share-with YOUR-ADO-ORG"
+  },
+  "devDependencies": {
+    "tfx-cli": "^0.16.0",
+    "vss-web-extension-sdk": "^5.141.0"
+  }
+}

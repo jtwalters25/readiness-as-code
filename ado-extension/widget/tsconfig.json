@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2019",
+    "module": "amd",
+    "lib": ["ES2019", "DOM"],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": false,
+    "outDir": ".",
+    "rootDir": "."
+  },
+  "include": ["*.ts"],
+  "exclude": ["node_modules"]
+}

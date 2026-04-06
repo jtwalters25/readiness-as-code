@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Readiness Widget Configuration</title>
+  <script src="../node_modules/vss-web-extension-sdk/lib/VSS.SDK.min.js"></script>
+  <script src="configuration.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", sans-serif;
+      font-size: 13px;
+      color: #323130;
+      padding: 16px;
+      background: #fff;
+    }
+    .field { margin-bottom: 14px; }
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #323130;
+    }
+    select, input[type="text"] {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid #8a8886;
+      border-radius: 2px;
+      font-size: 13px;
+      font-family: "Segoe UI", sans-serif;
+      color: #323130;
+      background: #fff;
+    }
+    select:focus, input:focus {
+      outline: none;
+      border-color: #0078d4;
+    }
+    .hint {
+      font-size: 11px;
+      color: #605e5c;
+      margin-top: 3px;
+    }
+  </style>
+</head>
+<body>
+  <div class="field">
+    <label for="pipeline-select">Pipeline</label>
+    <select id="pipeline-select">
+      <option value="">Loading pipelines...</option>
+    </select>
+    <div class="hint">Select the pipeline that runs the Readiness Scan task.</div>
+  </div>
+  <div class="field">
+    <label for="branch-input">Branch</label>
+    <input type="text" id="branch-input" placeholder="refs/heads/main" value="refs/heads/main" />
+    <div class="hint">Filter builds by branch (e.g. refs/heads/main).</div>
+  </div>
+</body>
+</html>

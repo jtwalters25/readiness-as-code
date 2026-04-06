@@ -1,0 +1,17 @@
+{
+  "name": "ready-task",
+  "version": "1.0.0",
+  "description": "ADO pipeline task for readiness-as-code scanning",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf *.js"
+  },
+  "dependencies": {
+    "azure-pipelines-task-lib": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "typescript": "^5.0.0"
+  }
+}

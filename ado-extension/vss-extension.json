@@ -1,0 +1,68 @@
+{
+  "manifestVersion": 1,
+  "id": "ready-readiness-as-code",
+  "publisher": "jtwalters25",
+  "version": "1.0.0",
+  "name": "ready — Readiness as Code",
+  "description": "Pipeline task and dashboard widget for practicing readiness as code. Run ready scan in your pipeline, gate PRs on red failures, and visualize scores on your team dashboard.",
+  "public": false,
+  "categories": ["Azure Pipelines"],
+  "tags": ["readiness", "compliance", "quality", "engineering", "dashboard"],
+  "targets": [
+    { "id": "Microsoft.VisualStudio.Services" }
+  ],
+  "links": {
+    "home": {
+      "uri": "https://github.com/jtwalters25/readiness-as-code"
+    },
+    "support": {
+      "uri": "https://github.com/jtwalters25/readiness-as-code/issues"
+    }
+  },
+  "icons": {
+    "default": "images/logo.png"
+  },
+  "files": [
+    { "path": "task" },
+    { "path": "widget" },
+    { "path": "images" },
+    {
+      "path": "node_modules/vss-web-extension-sdk/lib",
+      "addressable": true,
+      "packagePath": "node_modules/vss-web-extension-sdk/lib"
+    }
+  ],
+  "contributions": [
+    {
+      "id": "ready-task",
+      "type": "ms.vss-distributed-task.task",
+      "targets": ["ms.vss-distributed-task.tasks"],
+      "properties": {
+        "name": "task"
+      }
+    },
+    {
+      "id": "ready-widget",
+      "type": "ms.vss-dashboards-web.widget",
+      "targets": ["ms.vss-dashboards-web.widget-catalog"],
+      "properties": {
+        "name": "Readiness Score",
+        "description": "Shows readiness score, trend, and blocking failures for a service.",
+        "catalogIconUrl": "images/logo.png",
+        "uri": "widget/widget.html",
+        "supportedSizes": [
+          { "rowSpan": 1, "columnSpan": 2 }
+        ],
+        "supportedScopes": ["project_team"]
+      }
+    },
+    {
+      "id": "ready-widget-configuration",
+      "type": "ms.vss-dashboards-web.widget-configuration",
+      "targets": ["ms.vss-dashboards-web.widget-configuration"],
+      "properties": {
+        "uri": "widget/configuration.html"
+      }
+    }
+  ]
+}

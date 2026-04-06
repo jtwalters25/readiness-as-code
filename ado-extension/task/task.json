@@ -1,0 +1,84 @@
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "name": "ReadinessScan",
+  "friendlyName": "Readiness Scan",
+  "description": "Run a readiness-as-code scan and publish results as test cases.",
+  "helpMarkDown": "Runs `ready scan` against your repository and publishes checkpoint results as ADO test results. Red failures block the pipeline. See [docs](https://github.com/jtwalters25/readiness-as-code).",
+  "category": "Test",
+  "author": "jtwalters25",
+  "version": {
+    "Major": 1,
+    "Minor": 0,
+    "Patch": 0
+  },
+  "instanceNameFormat": "Readiness Scan $(workingDirectory)",
+  "inputs": [
+    {
+      "name": "workingDirectory",
+      "type": "filePath",
+      "label": "Working Directory",
+      "defaultValue": "$(Build.SourcesDirectory)",
+      "required": false,
+      "helpMarkDown": "Directory to scan. Defaults to the repository root."
+    },
+    {
+      "name": "pack",
+      "type": "string",
+      "label": "Checkpoint Pack",
+      "defaultValue": "",
+      "required": false,
+      "helpMarkDown": "Force a specific checkpoint pack (starter, web-api, security-baseline, telemetry). Leave empty for auto-detection."
+    },
+    {
+      "name": "calibrate",
+      "type": "boolean",
+      "label": "Calibrate Mode (report-only)",
+      "defaultValue": "false",
+      "required": false,
+      "helpMarkDown": "Run in report-only mode — results are published but the build never fails. Use during initial rollout."
+    },
+    {
+      "name": "failOnYellow",
+      "type": "boolean",
+      "label": "Fail on Warnings",
+      "defaultValue": "false",
+      "required": false,
+      "helpMarkDown": "Treat yellow (warning) checkpoints as build failures in addition to red failures."
+    },
+    {
+      "name": "publishResults",
+      "type": "boolean",
+      "label": "Publish Test Results",
+      "defaultValue": "true",
+      "required": false,
+      "helpMarkDown": "Publish checkpoint results as JUnit test cases in the Tests tab."
+    },
+    {
+      "name": "publishBaseline",
+      "type": "boolean",
+      "label": "Publish Baseline Artifact",
+      "defaultValue": "true",
+      "required": false,
+      "helpMarkDown": "Publish the scan result as a build artifact named 'readiness-scan'. Required for the dashboard widget."
+    }
+  ],
+  "outputVariables": [
+    {
+      "name": "score",
+      "description": "Readiness score as a percentage (0–100)."
+    },
+    {
+      "name": "blocking",
+      "description": "Number of red (blocking) checkpoint failures."
+    },
+    {
+      "name": "warnings",
+      "description": "Number of yellow (warning) checkpoint failures."
+    }
+  ],
+  "execution": {
+    "Node16": {
+      "target": "index.js"
+    }
+  }
+}
