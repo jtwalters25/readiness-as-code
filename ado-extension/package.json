@@ -7,7 +7,7 @@
     "build": "cd task && npm run build && cd ../widget && npm run build",
     "clean": "cd task && npm run clean && cd ../widget && rm -f *.js",
     "package": "tfx extension create --manifest-globs vss-extension.json",
-    "publish-private": "tfx extension publish --manifest-globs vss-extension.json --share-with YOUR-ADO-ORG"
+    "publish-private": "tfx extension publish --manifest-globs vss-extension.json --share-with $ADO_ORG"
   },
   "devDependencies": {
     "tfx-cli": "^0.16.0",

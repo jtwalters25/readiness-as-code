@@ -168,6 +168,8 @@ ready init --list-packs                 # Show all available packs
 
 **CI gating on every PR.** The scanner exits non-zero on red failures. Drop the included template into GitHub Actions, Azure Pipelines, or GitLab CI. → [Details](docs/ci-integration.md)
 
+**Azure DevOps Marketplace extension.** First-class ADO integration: a pipeline task that runs `ready scan` and publishes every checkpoint as a test case in the Tests tab, plus a dashboard widget showing your score, trend sparkline, and blocking failure count across builds. → [Details](ado-extension/README.md)
+
 ## Who This Is For
 
 **Engineering teams** — Stop spending hours on review prep. Know your compliance posture at any time.

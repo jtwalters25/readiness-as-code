@@ -1,0 +1,10 @@
+node_modules/
+task/node_modules/
+widget/node_modules/
+*.vsix
+
+# Compiled TypeScript output — built from source, not committed
+task/index.js
+task/junit.js
+widget/widget.js
+widget/configuration.js

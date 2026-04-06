@@ -1,0 +1,2 @@
+Replace this file with logo.png (128x128 px PNG).
+This image appears in the Marketplace listing and the widget catalog.

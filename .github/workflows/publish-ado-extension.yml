@@ -1,0 +1,68 @@
+name: Publish ADO Extension
+
+on:
+  push:
+    tags:
+      - 'ado-v*'    # triggers on ado-v1.0.0, ado-v1.2.3, etc.
+  workflow_dispatch:
+    inputs:
+      share_with:
+        description: 'ADO org to share with privately (leave blank to publish publicly)'
+        required: false
+        default: ''
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install tfx-cli
+        run: npm install -g tfx-cli
+
+      - name: Install extension dependencies
+        working-directory: ado-extension
+        run: npm run install:all
+
+      - name: Build TypeScript
+        working-directory: ado-extension
+        run: npm run build
+
+      - name: Package extension
+        working-directory: ado-extension
+        run: npm run package
+
+      - name: Upload .vsix artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ado-extension-vsix
+          path: ado-extension/*.vsix
+          retention-days: 30
+
+      # ── Publish to Marketplace ───────────────────────────────────────────
+      # Requires MARKETPLACE_PAT secret: Personal Access Token with
+      # Marketplace (Publish) scope at https://marketplace.visualstudio.com
+      - name: Publish to Marketplace (public)
+        if: ${{ !inputs.share_with }}
+        working-directory: ado-extension
+        env:
+          MARKETPLACE_PAT: ${{ secrets.MARKETPLACE_PAT }}
+        run: |
+          tfx extension publish \
+            --manifest-globs vss-extension.json \
+            --token "$MARKETPLACE_PAT"
+
+      - name: Publish privately to ADO org
+        if: ${{ inputs.share_with != '' }}
+        working-directory: ado-extension
+        env:
+          MARKETPLACE_PAT: ${{ secrets.MARKETPLACE_PAT }}
+        run: |
+          tfx extension publish \
+            --manifest-globs vss-extension.json \
+            --token "$MARKETPLACE_PAT" \
+            --share-with "${{ inputs.share_with }}"
