@@ -63,17 +63,17 @@ PACKS = {
         "telemetry",
         "Telemetry — logging, tracing, metrics, dashboards, and on-call registration",
     ),
-    "azure-engineering-review": (
-        "azure-engineering-review",
-        "Azure engineering review — 26 checks covering architecture, security, observability, reliability, testing, and AI/RAI",
+    "engineering-review": (
+        "engineering-review",
+        "Engineering review — 26 checks covering architecture, security, observability, reliability, testing, and AI/RAI",
     ),
-    "azure-operational-review": (
-        "azure-operational-review",
-        "Azure operational review — 14 checks covering SLOs, deployment, on-call, data retention, and capacity",
+    "operational-review": (
+        "operational-review",
+        "Operational review — 14 checks covering SLOs, deployment, on-call, data retention, and capacity",
     ),
-    "azure-governance": (
-        "azure-governance",
-        "Azure governance — 15 checks covering service classification, SDLC gates, and external review attestations",
+    "governance": (
+        "governance",
+        "Governance — 15 checks covering service classification, SDLC gates, and external review attestations",
     ),
 }
 

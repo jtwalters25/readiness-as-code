@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "pack": "azure-engineering-review",
+  "pack": "engineering-review",
   "description": "Engineering review checks for cloud-hosted services. Covers architecture, security, observability, reliability, deployment, testing, AI/RAI, and documentation.",
   "checkpoints": [
 
