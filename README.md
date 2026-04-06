@@ -3,13 +3,13 @@
 </p>
 
 <h3 align="center">
-  Know before you ship.
+  AI tools made your team faster. They didn't make your team safer.
 </h3>
 
 <p align="center">
-  The reference implementation of <strong>readiness as code</strong> —<br/>
-  the practice of expressing review criteria as committed definitions,<br/>
-  evaluated on every change, with drift detected automatically.
+  <strong>ready</strong> is the discipline layer that keeps pace with AI velocity —<br/>
+  review criteria as committed definitions, evaluated on every change,<br/>
+  with drift detected automatically before it becomes an incident.
 </p>
 
 <p align="center">
@@ -34,11 +34,15 @@
 
 ---
 
-## The Practice: Readiness as Code
+## The Problem: Velocity Outran Discipline
 
-Most teams treat readiness as a moment — a review meeting, a checklist, a sign-off. The moment it ends, drift begins. Changes ship, telemetry gets removed, configs shift, exception handling gets altered — and nobody notices until an incident.
+AI coding tools removed the friction from writing and shipping code. They did not remove the friction from the discipline work — health checks, secrets hygiene, on-call registration, telemetry coverage, auth on every endpoint. That work is still human, still manual, still slow.
 
-**Readiness as code** is the practice of treating readiness as a continuously evaluated property instead. Review criteria are expressed as committed definitions. Every change is scanned against them. Exceptions are explicit and time-bound. Drift is detected before it becomes an incident.
+The result: **velocity is now AI-speed. Discipline is still person-speed.** The gap between the two is where incidents live.
+
+This isn't a competence problem. The Claude Code source exposure, the wave of data breaches at otherwise-strong engineering orgs, the production breakdowns on services that passed code review — these are discipline failures caused by velocity. Smart teams moved fast, skipped the prep work, and found out later that the scaffolding wasn't there.
+
+**Readiness as code** closes that gap. Review criteria are expressed as committed definitions. Every change is scanned against them. Exceptions are explicit and time-bound. The discipline layer runs at the same speed as the rest of the pipeline.
 
 `ready` is the tool that implements this practice.
 
@@ -48,8 +52,9 @@ It replaces **prep work**, not judgment.
 
 | Before | After |
 |--------|-------|
-| Manual readiness checklists (hours) | Automated scan (seconds) |
-| Point-in-time review ceremonies | Continuous compliance on every PR |
+| AI writes code in seconds; readiness checks take hours | Readiness checks run in the same pipeline, same pace |
+| Manual checklists that can't keep up with AI velocity | Automated scan on every PR — no human bottleneck |
+| Point-in-time review ceremonies | Continuous compliance, not a quarterly ritual |
 | Drift detected by incidents | Drift detected before merge |
 | Tribal knowledge of what's missing | Structured gap list with file-path evidence |
 | "Are we ready?" is a subjective question | "Are we ready?" has a deterministic answer |
@@ -135,7 +140,7 @@ Start with a curated pack, then customize:
 ready init                              # Universal starter (default)
 ready init --pack web-api               # REST/HTTP API checks
 ready init --pack security-baseline     # Secrets, dependency hygiene, security policy
-ready init --pack telemetry # Logging, tracing, metrics, dashboards
+ready init --pack telemetry             # Logging, tracing, metrics, dashboards
 ready init --list-packs                 # Show all available packs
 ```
 
@@ -158,9 +163,11 @@ ready init --list-packs                 # Show all available packs
 
 **Closed-loop work item tracking.** Gaps become tracked work items (GitHub Issues, Azure DevOps, Jira). If a ticket is closed but the code still fails → flagged as **regression**. If code is fixed but the ticket is still open → flagged as **stale**.
 
-**Cross-repo aggregation.** Run `ready aggregate` across multiple baselines. *"Telemetry gaps in 4 of 5 services"* — that's a platform problem, not a team problem.
+**Cross-repo aggregation.** Run `ready aggregate` across multiple baselines. *"Telemetry gaps in 4 of 5 services"* — that's a platform problem, not a team problem. Generate an HTML heatmap report leadership can actually read.
 
-**Expiring accepted risks.** Teams can acknowledge known gaps with justification and an expiry date. The scanner respects them — then re-flags when the expiry passes.
+**Expiring accepted risks.** Teams can acknowledge known gaps with justification and an expiry date. The scanner respects them — then re-flags when the expiry passes. Nothing stays accepted forever by accident.
+
+**Readiness audit.** `ready audit` reports the health of your readiness system itself — exception age distribution, definition staleness, review_by coverage, and score trend. Know when your discipline layer is drifting, not just your code.
 
 **AI-assisted checkpoint authoring.** `ready author --from guidelines.md` generates a ready-to-paste prompt combining your guideline document with authoring instructions. Paste it into any AI to generate checkpoint definitions. Works with Claude, ChatGPT, Copilot, Cursor, or any model.
 
@@ -172,17 +179,20 @@ ready init --list-packs                 # Show all available packs
 
 ## Who This Is For
 
-**Engineering teams** — Stop spending hours on review prep. Know your compliance posture at any time.
+**Teams using AI coding tools** — Copilot, Cursor, Claude Code, and their successors are accelerating how fast code gets written and shipped. `ready` is the enforcement layer that makes sure discipline scales at the same rate. The faster your team moves, the more you need it.
 
-**Reviewers** — Arrive at reviews with a pre-populated, evidence-backed assessment. Spend the meeting on judgment calls, not discovery.
+**Engineering teams** — Stop spending hours on review prep. Know your compliance posture at any time, on any branch, before anyone asks.
 
-**Engineering leadership** — Compliance posture across all services in one view. Auditable trail of every decision.
+**Reviewers** — Arrive at reviews with a pre-populated, evidence-backed assessment. Spend the meeting on judgment calls, not discovery work the scanner already did.
+
+**Engineering leadership** — Compliance posture across all services in one view. Auditable trail of every decision. An HTML heatmap showing systemic gaps — not anecdotes, not vibes.
 
 ## What This Is Not
 
 - **Not a static analysis tool.** SonarQube checks code quality. This checks whether your service meets its review requirements.
 - **Not a policy engine.** OPA/Sentinel enforce infra policies at deploy time. This tracks operational and engineering readiness across code and non-code artifacts.
 - **Not a compliance SaaS.** Drata/RegScale automate regulatory frameworks. This enforces your team's own internal review standards.
+- **Not a replacement for AI coding tools.** It's the complement to them — the discipline layer that keeps pace with the velocity they enable.
 - **Not a replacement for review meetings.** This replaces the prep work so the meeting can focus on judgment calls the scanner can't make.
 
 ## Commands
@@ -263,10 +273,11 @@ These principles define what *readiness as code* means in practice. They are not
 
 1. **Detection, not decisions.** The scanner finds gaps. Humans decide what to do.
 2. **Continuous, not ceremonial.** Checked on every PR, not once a quarter.
-3. **Portable, not hosted.** Files in your repo. No infrastructure.
-4. **Evidence-backed, not trust-based.** Every assertion has a file path, attestation, or work item.
-5. **Expiring, not permanent.** Accepted risks have expiry dates. Nothing is forever.
-6. **Score-first, not report-first.** The answer to "are we ready?" is one line. Detail is on demand.
+3. **Velocity-aware, not velocity-hostile.** Designed to run at the speed of AI-assisted development — no human bottleneck in the loop.
+4. **Portable, not hosted.** Files in your repo. No infrastructure.
+5. **Evidence-backed, not trust-based.** Every assertion has a file path, attestation, or work item.
+6. **Expiring, not permanent.** Accepted risks have expiry dates. Nothing is forever.
+7. **Score-first, not report-first.** The answer to "are we ready?" is one line. Detail is on demand.
 
 ## Contributing
 
