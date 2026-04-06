@@ -66,11 +66,11 @@ PACKS = {
 
 
 def _find_examples_dir() -> str:
-    """Locate the examples/ directory relative to this file."""
+    """Locate the examples/ directory — bundled inside the package."""
     script_dir = os.path.dirname(os.path.abspath(__file__))
     candidates = [
-        os.path.join(script_dir, "..", "examples"),
-        os.path.join(script_dir, "examples"),
+        os.path.join(script_dir, "examples"),        # installed via pip
+        os.path.join(script_dir, "..", "examples"),  # legacy repo root location
     ]
     for c in candidates:
         if os.path.isdir(c):
