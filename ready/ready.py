@@ -63,6 +63,18 @@ PACKS = {
         "telemetry",
         "Telemetry — logging, tracing, metrics, dashboards, and on-call registration",
     ),
+    "azure-engineering-review": (
+        "azure-engineering-review",
+        "Azure engineering review — 26 checks covering architecture, security, observability, reliability, testing, and AI/RAI",
+    ),
+    "azure-operational-review": (
+        "azure-operational-review",
+        "Azure operational review — 14 checks covering SLOs, deployment, on-call, data retention, and capacity",
+    ),
+    "azure-governance": (
+        "azure-governance",
+        "Azure governance — 15 checks covering service classification, SDLC gates, and external review attestations",
+    ),
 }
 
 
@@ -234,7 +246,7 @@ def cmd_init(args):
 
 VALID_SEVERITIES = {"red", "yellow"}
 VALID_TYPES = {"code", "external", "hybrid"}
-VALID_METHODS = {"file_exists", "glob", "grep", "grep_count", "file_count", "json_path", "external_attestation", "hybrid"}
+VALID_METHODS = {"file_exists", "glob", "glob_all", "grep", "grep_all", "grep_count", "file_count", "json_path", "external_attestation", "human_attestation", "hybrid"}
 VALID_CONFIDENCES = {"verified", "likely", "inconclusive"}
 
 

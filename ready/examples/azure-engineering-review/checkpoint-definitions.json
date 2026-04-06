@@ -1,0 +1,522 @@
+{
+  "version": "1.0",
+  "pack": "azure-engineering-review",
+  "description": "Engineering review checks for cloud-hosted services. Covers architecture, security, observability, reliability, deployment, testing, AI/RAI, and documentation.",
+  "checkpoints": [
+
+    {
+      "id": "eng-arch-01",
+      "title": "ADRs exist for major architectural decisions",
+      "description": "Architecture Decision Records document the why behind key design choices. Required before production launch.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Architecture & Design",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{docs/decisions/[0-9]*.md,docs/adr/[0-9]*.md,docs/adr/ADR-*.md,ADR-*.md}",
+        "min_matches": 1
+      },
+      "applicable_tags": [],
+      "fix_hint": "Create a docs/decisions/ or docs/adr/ directory with at least one ADR. Use a standard template: title, status, context, decision, consequences.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-sec-01",
+      "title": "Token validation on protected endpoints",
+      "description": "All protected endpoints must validate authentication tokens via a decorator, middleware, or dependency injection.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Security & Privacy",
+      "severity": "red",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "grep",
+        "pattern": "(validate_token|require_auth|@login_required|Depends.*auth|authenticate|bearer|jwt\\.verify|passport\\.authenticate)",
+        "target": "**/*.{py,ts,js,go}"
+      },
+      "applicable_tags": ["customer-facing", "cloud-hosted"],
+      "fix_hint": "Apply auth middleware or a validation decorator to all protected route handlers.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-sec-02",
+      "title": "Authorization not in audit/permissive mode",
+      "description": "Authorization enforcement must not be in audit or permissive/learning mode in production.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Security & Privacy",
+      "severity": "red",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "grep",
+        "pattern": "(AUDIT_MODE|permissive|learning_mode|enforce\\s*=\\s*false|enforcement.*disabled)",
+        "target": "**/*.{py,ts,js,go,yaml,yml,json,env}",
+        "pass_condition": "absent"
+      },
+      "applicable_tags": ["customer-facing", "cloud-hosted"],
+      "fix_hint": "Set authorization enforcement to enforced mode. Remove or disable any audit/permissive mode flags in production config.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-sec-03",
+      "title": "Input validation for injection attacks",
+      "description": "Application must validate and sanitize inputs to prevent injection attacks.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Security & Privacy",
+      "severity": "red",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{validators,validation,sanitize,schemas}/**",
+        "min_matches": 1
+      },
+      "applicable_tags": ["customer-facing"],
+      "fix_hint": "Create a validators/ or schemas/ directory with input validation logic. Use a validation library appropriate for your stack.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-sec-04",
+      "title": "Threat model document exists",
+      "description": "A threat model must be documented before production launch for customer-facing services.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Security & Privacy",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{docs/*threat*,docs/*THREAT*,THREAT_MODEL*,threat-model*}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["customer-facing"],
+      "fix_hint": "Create a threat model document in docs/. Include trust boundaries, data flows, and mitigations for identified threats.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-sec-05",
+      "title": "Responsible disclosure policy exists",
+      "description": "SECURITY.md defines how to report security vulnerabilities.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Security & Privacy",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "verified",
+      "verification": {
+        "method": "glob",
+        "pattern": "{SECURITY.md,SECURITY.txt,.github/SECURITY.md}",
+        "min_matches": 1
+      },
+      "applicable_tags": [],
+      "fix_hint": "Add a SECURITY.md with instructions for reporting vulnerabilities. Include contact method and expected response time.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-sec-06",
+      "title": "SDL gates enabled in CI pipeline",
+      "description": "Security Development Lifecycle gates (credential scanning, dependency scanning, SAST) must run in CI.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Security & Privacy",
+      "severity": "red",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "grep_all",
+        "patterns": ["(credential|secret|gitleaks|trufflehog|detect-secrets)", "(dependabot|snyk|safety|audit|trivy|grype)", "(bandit|semgrep|codeql|sonar|eslint|flake8)"],
+        "target": "{.github/**/*.yml,.github/**/*.yaml,.pipelines/**/*.yml,azure-pipelines.yml,.gitlab-ci.yml,Jenkinsfile}"
+      },
+      "applicable_tags": ["cloud-hosted", "customer-facing"],
+      "fix_hint": "Add credential scanning, dependency scanning, and SAST steps to your CI pipeline.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-sec-07",
+      "title": "Auth validation tests exist",
+      "description": "Tests specifically covering authentication and authorization logic must exist.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Security & Privacy",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{tests/**/test_*auth*,tests/**/test_*security*,tests/**/test_*permission*,**/__tests__/**/*auth*}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["customer-facing"],
+      "fix_hint": "Add test files covering auth flows: valid tokens, expired tokens, unauthorized access, permission boundaries.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-sec-08",
+      "title": "No hardcoded secrets or credentials",
+      "description": "Source code must not contain hardcoded passwords, API keys, tokens, or connection strings.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Security & Privacy",
+      "severity": "red",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "grep",
+        "pattern": "(password\\s*=\\s*['\"][^'\"]{4,}|api_key\\s*=\\s*['\"][^'\"]{8,}|secret\\s*=\\s*['\"][^'\"]{8,}|token\\s*=\\s*['\"][^'\"]{10,})",
+        "target": "**/*.{py,ts,js,go,java,cs}",
+        "pass_condition": "absent"
+      },
+      "applicable_tags": [],
+      "fix_hint": "Move all secrets to environment variables or a secrets manager. Use os.environ, dotenv, or Key Vault references.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-obs-01",
+      "title": "Application telemetry SDK wired",
+      "description": "Service must emit telemetry via OpenTelemetry or an equivalent SDK.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Observability",
+      "severity": "red",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "grep",
+        "pattern": "(opentelemetry|applicationinsights|app_insights|datadog|newrelic|honeycomb|jaeger|zipkin)",
+        "target": "**/*.{py,ts,js,go,java,cs,toml,txt,json}"
+      },
+      "applicable_tags": ["cloud-hosted", "customer-facing"],
+      "fix_hint": "Instrument your application with OpenTelemetry or your organization's telemetry SDK. Emit traces, metrics, and logs.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-obs-02",
+      "title": "Alert rules defined",
+      "description": "Automated alert rules must be defined for error rate, latency, and availability thresholds.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Observability",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{infra/*alert*,infra/*monitor*,monitoring/*,alerts/*,*.alert.yaml,*.alert.json,bicep/*alert*,terraform/*alert*}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["cloud-hosted"],
+      "fix_hint": "Define alert rules as code in your infra/ directory. Cover p99 latency, error rate >1%, and availability <99.9%.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-obs-03",
+      "title": "Production dashboards defined as code",
+      "description": "Monitoring dashboards must be defined as code (Bicep, Terraform, Grafana JSON, etc.).",
+      "guideline": "Engineering Review",
+      "guideline_section": "Observability",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{infra/*dashboard*,monitoring/*dashboard*,dashboards/*,*.dashboard.json,grafana/*}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["cloud-hosted"],
+      "fix_hint": "Commit your dashboard definition as code so it can be version controlled and reproduced.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-rel-01",
+      "title": "Health check endpoint exists",
+      "description": "Service must expose a /health endpoint returning HTTP 200 with JSON status.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Reliability",
+      "severity": "red",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "grep",
+        "pattern": "(/health|health_check|healthcheck|/ping|/status)",
+        "target": "**/*.{py,ts,js,go,java,cs}"
+      },
+      "applicable_tags": ["cloud-hosted", "customer-facing"],
+      "fix_hint": "Add a GET /health endpoint that returns {\"status\": \"healthy\"} with HTTP 200 when operational.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-rel-02",
+      "title": "Retry logic with backoff for external calls",
+      "description": "All external service calls must implement retry with exponential backoff.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Reliability",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "grep",
+        "pattern": "(retry|backoff|tenacity|resilience4j|polly|exponential|max_attempts|retries)",
+        "target": "**/*.{py,ts,js,go,java,cs}"
+      },
+      "applicable_tags": ["cloud-hosted"],
+      "fix_hint": "Wrap external HTTP calls with retry logic and exponential backoff. Use tenacity (Python), async-retry (Node), or equivalent.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-rel-03",
+      "title": "Circuit breaker or timeout configured for external dependencies",
+      "description": "External calls must have timeouts. Circuit breakers prevent cascading failures.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Reliability",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "grep",
+        "pattern": "(timeout|circuit.?breaker|CircuitBreaker|httpx|requests.*timeout|axios.*timeout)",
+        "target": "**/*.{py,ts,js,go,java,cs}"
+      },
+      "applicable_tags": ["cloud-hosted"],
+      "fix_hint": "Set explicit timeouts on all HTTP clients. Consider adding a circuit breaker for critical dependencies.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-deploy-01",
+      "title": "CI/CD pipeline exists",
+      "description": "Automated build, test, and deploy pipeline must be configured.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Deployment",
+      "severity": "red",
+      "type": "code",
+      "confidence": "verified",
+      "verification": {
+        "method": "glob",
+        "pattern": "{.github/workflows/*.yml,.pipelines/*.yml,azure-pipelines.yml,.gitlab-ci.yml,Jenkinsfile,Makefile}",
+        "min_matches": 1
+      },
+      "applicable_tags": [],
+      "fix_hint": "Add a CI/CD pipeline that runs tests and deploys on merge to main.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-deploy-02",
+      "title": "Infrastructure as code exists",
+      "description": "Infrastructure must be defined as code — not provisioned manually.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Deployment",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{infra/**,bicep/**,terraform/**,*.bicep,*.tf,pulumi/**,cdk/**}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["cloud-hosted"],
+      "fix_hint": "Define your infrastructure in Bicep, Terraform, Pulumi, or CDK. Commit to the repo and deploy via pipeline.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-test-01",
+      "title": "Unit tests exist with minimum coverage",
+      "description": "At least 10 unit test files must exist.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Testing",
+      "severity": "red",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{tests/**/test_*.py,tests/**/*.test.ts,tests/**/*.test.js,tests/**/*.spec.ts,**/__tests__/**/*.test.*}",
+        "min_matches": 10
+      },
+      "applicable_tags": [],
+      "fix_hint": "Add unit tests. Aim for at least 10 test files covering core business logic.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-test-02",
+      "title": "Integration tests exist",
+      "description": "Integration tests covering service boundaries and external dependencies must exist.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Testing",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{tests/*integration*,tests/**/integration/**,integration-tests/**,e2e/**}",
+        "min_matches": 1
+      },
+      "applicable_tags": [],
+      "fix_hint": "Add an integration test suite that tests your service against real or stubbed dependencies.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-test-03",
+      "title": "Load/performance tests exist",
+      "description": "Load tests must be defined to validate service performance under expected traffic.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Testing",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{locustfile.py,load-tests/**,perf-tests/**,**/*.jmx,k6/**,**/k6.js}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["cloud-hosted", "customer-facing"],
+      "fix_hint": "Add load tests using Locust, k6, or JMeter. Test at 2x expected peak traffic.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-test-04",
+      "title": "Coverage gate configured in CI",
+      "description": "CI pipeline must enforce a minimum code coverage threshold.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Testing",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "grep",
+        "pattern": "(cov-fail-under|coverageThreshold|coverage.*min|fail_under|--cov-fail)",
+        "target": "{setup.cfg,pyproject.toml,.nycrc,jest.config.*,pytest.ini,.coveragerc}"
+      },
+      "applicable_tags": [],
+      "fix_hint": "Set a minimum coverage threshold. For pytest: add --cov-fail-under=80 to your test command.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-ai-01",
+      "title": "Prompt injection detection implemented",
+      "description": "AI/LLM features must include input validation to detect and block prompt injection attacks.",
+      "guideline": "Engineering Review",
+      "guideline_section": "AI & Responsible AI",
+      "severity": "red",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "grep",
+        "pattern": "(prompt.?injection|jailbreak|input.?sanitiz|llm.?guard|content.?filter|system.?prompt)",
+        "target": "**/*.{py,ts,js}"
+      },
+      "applicable_tags": ["ai-service"],
+      "fix_hint": "Add prompt injection detection before passing user input to an LLM. Consider LLM Guard or a custom content filter.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-ai-02",
+      "title": "Red team assessment documented",
+      "description": "AI features must have a documented red team or adversarial testing assessment.",
+      "guideline": "Engineering Review",
+      "guideline_section": "AI & Responsible AI",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{docs/*red*team*,docs/*redteam*,docs/*adversarial*,docs/*rai*,RED_TEAM*}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["ai-service"],
+      "fix_hint": "Document your red team assessment in docs/. Include attack scenarios tested and mitigations applied.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-doc-01",
+      "title": "README exists",
+      "description": "Every repository must have a README documenting purpose, setup, and usage.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Documentation",
+      "severity": "red",
+      "type": "code",
+      "confidence": "verified",
+      "verification": {
+        "method": "glob",
+        "pattern": "{README.md,README.rst,README.txt,README}",
+        "min_matches": 1
+      },
+      "applicable_tags": [],
+      "fix_hint": "Create a README.md covering: what this service does, how to set it up locally, how to run tests, and how to deploy.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-doc-02",
+      "title": "CODEOWNERS configured",
+      "description": "CODEOWNERS defines who reviews changes to which parts of the codebase.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Documentation",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "verified",
+      "verification": {
+        "method": "glob",
+        "pattern": "{CODEOWNERS,.github/CODEOWNERS,docs/CODEOWNERS}",
+        "min_matches": 1
+      },
+      "applicable_tags": [],
+      "fix_hint": "Add a CODEOWNERS file mapping directories to team owners. Required for PR auto-assignment.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-doc-03",
+      "title": "CHANGELOG exists",
+      "description": "A CHANGELOG documents notable changes per release.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Documentation",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "verified",
+      "verification": {
+        "method": "glob",
+        "pattern": "{CHANGELOG.md,CHANGELOG.txt,CHANGES.md,HISTORY.md}",
+        "min_matches": 1
+      },
+      "applicable_tags": [],
+      "fix_hint": "Add a CHANGELOG.md following Keep a Changelog format: https://keepachangelog.com",
+      "doc_link": ""
+    },
+
+    {
+      "id": "eng-doc-04",
+      "title": "OpenAPI / API spec exists",
+      "description": "REST APIs must have a machine-readable API specification.",
+      "guideline": "Engineering Review",
+      "guideline_section": "Documentation",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{openapi.yaml,openapi.json,swagger.yaml,swagger.json,api/**/*.yaml,docs/api*}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["customer-facing"],
+      "fix_hint": "Generate or write an OpenAPI 3.x spec. FastAPI and NestJS auto-generate this; for others use swagger-jsdoc or similar.",
+      "doc_link": ""
+    }
+  ]
+}

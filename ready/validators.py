@@ -161,14 +161,10 @@ def _verify_glob(verification: dict, repo_root: str) -> tuple[bool, list[str]]:
     return len(matches) >= min_matches, [os.path.relpath(m, repo_root) for m in matches]
 
 
-def _verify_grep(verification: dict, repo_root: str) -> tuple[bool, list[str]]:
-    pattern = verification.get("pattern", "")
-    target = verification.get("target", "**/*")
-    min_matches = verification.get("min_matches", 1)
-
+def _grep_files(pattern: str, target: str, repo_root: str) -> list[str]:
+    """Shared helper: grep a pattern across target files, return rel-path:line evidence."""
     target_files = _resolve_glob(target, repo_root)
     evidence = []
-
     for filepath in target_files:
         if not os.path.isfile(filepath):
             continue
@@ -176,16 +172,58 @@ def _verify_grep(verification: dict, repo_root: str) -> tuple[bool, list[str]]:
             with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
                 for line_num, line in enumerate(f, 1):
                     if re.search(pattern, line, re.IGNORECASE):
-                        rel_path = os.path.relpath(filepath, repo_root)
-                        evidence.append(f"{rel_path}:{line_num}")
+                        evidence.append(f"{os.path.relpath(filepath, repo_root)}:{line_num}")
         except (IOError, OSError):
             continue
+    return evidence
 
-    # For secrets detection (min_matches=0), finding matches is a FAIL
+
+def _verify_grep(verification: dict, repo_root: str) -> tuple[bool, list[str]]:
+    pattern = verification.get("pattern", "")
+    target = verification.get("target", "**/*")
+    min_matches = verification.get("min_matches", 1)
+    pass_condition = verification.get("pass_condition", "present")
+
+    evidence = _grep_files(pattern, target, repo_root)
+
+    # pass_condition: "absent" — pattern must NOT be found (negative check)
+    if pass_condition == "absent":
+        return len(evidence) == 0, evidence
+
+    # Legacy: min_matches=0 was used for secrets detection
     if min_matches == 0:
         return len(evidence) == 0, evidence
 
     return len(evidence) >= min_matches, evidence
+
+
+def _verify_grep_all(verification: dict, repo_root: str) -> tuple[bool, list[str]]:
+    """All patterns in `patterns` must be found — used for SDL gate checks."""
+    patterns = verification.get("patterns", [])
+    target = verification.get("target", "**/*")
+    all_evidence = []
+
+    for pattern in patterns:
+        hits = _grep_files(pattern, target, repo_root)
+        if not hits:
+            return False, [f"Pattern not found: {pattern}"]
+        all_evidence.extend(hits)
+
+    return True, all_evidence
+
+
+def _verify_glob_all(verification: dict, repo_root: str) -> tuple[bool, list[str]]:
+    """All patterns in `patterns` must match at least one file."""
+    patterns = verification.get("patterns", [])
+    all_evidence = []
+
+    for pattern in patterns:
+        matches = _resolve_glob(pattern, repo_root)
+        if not matches:
+            return False, [f"No files found matching: {pattern}"]
+        all_evidence.extend(os.path.relpath(m, repo_root) for m in matches)
+
+    return True, all_evidence
 
 
 def _verify_grep_count(verification: dict, repo_root: str) -> tuple[bool, list[str]]:
@@ -258,7 +296,9 @@ def _verify_external(
 VERIFICATION_METHODS = {
     "file_exists": _verify_file_exists,
     "glob": _verify_glob,
+    "glob_all": _verify_glob_all,
     "grep": _verify_grep,
+    "grep_all": _verify_grep_all,
     "grep_count": _verify_grep_count,
     "file_count": _verify_file_count,
     "json_path": _verify_json_path,

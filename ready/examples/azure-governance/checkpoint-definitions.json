@@ -1,0 +1,303 @@
+{
+  "version": "1.0",
+  "pack": "azure-governance",
+  "description": "Governance and SDLC compliance checks. Covers service classification, SDLC gates, and external attestations for monitoring, security, incident management, and review sign-offs.",
+  "checkpoints": [
+
+    {
+      "id": "gov-class-01",
+      "title": "Service class explicitly defined",
+      "description": "Service tier and classification (internal tool, customer-facing, data pipeline, etc.) must be declared in service metadata.",
+      "guideline": "Governance",
+      "guideline_section": "Service Classification",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "grep",
+        "pattern": "(service.?class|service.?tier|tier:\\s|classification:|customer.?facing|internal.?tool)",
+        "target": "{service.yaml,service.yml,catalog-info.yaml,.service.yaml,README.md}"
+      },
+      "applicable_tags": [],
+      "fix_hint": "Add a service_class or tier field to your service.yaml metadata file.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "gov-class-02",
+      "title": "Code ownership file exists",
+      "description": "CODEOWNERS or owners.txt must define who is accountable for this service.",
+      "guideline": "Governance",
+      "guideline_section": "Service Classification",
+      "severity": "red",
+      "type": "code",
+      "confidence": "verified",
+      "verification": {
+        "method": "glob",
+        "pattern": "{CODEOWNERS,.github/CODEOWNERS,OWNERS,owners.txt}",
+        "min_matches": 1
+      },
+      "applicable_tags": [],
+      "fix_hint": "Add a CODEOWNERS file at the repo root or .github/. Map file paths to owning teams.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "gov-sdlc-01",
+      "title": "Engineering review evidence committed",
+      "description": "Evidence of engineering review completion must be committed to the repo.",
+      "guideline": "Governance",
+      "guideline_section": "SDLC Compliance",
+      "severity": "red",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{docs/reviews/**,docs/ENGINEERING_REVIEW*,docs/eng-review*,.readiness/review-baseline.json}",
+        "min_matches": 1
+      },
+      "applicable_tags": [],
+      "fix_hint": "Commit your engineering review artifacts to docs/reviews/. Include the review-baseline.json as a minimum.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "gov-sdlc-02",
+      "title": "Rollback documentation committed",
+      "description": "Rollback procedures must be committed before production deployment.",
+      "guideline": "Governance",
+      "guideline_section": "SDLC Compliance",
+      "severity": "red",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{docs/ROLLBACK*,docs/rollback*,runbooks/rollback*}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["cloud-hosted"],
+      "fix_hint": "Create and commit docs/ROLLBACK.md before your first production deployment.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "gov-sdlc-03",
+      "title": "DRI and operational docs exist",
+      "description": "Both on-call rotation and at least one runbook must be committed — build-it-run-it accountability.",
+      "guideline": "Governance",
+      "guideline_section": "SDLC Compliance",
+      "severity": "red",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob_all",
+        "patterns": [
+          "{docs/ONCALL*,docs/oncall*,ONCALL.md}",
+          "{docs/runbooks/**,runbooks/**,docs/RUNBOOK*}"
+        ]
+      },
+      "applicable_tags": ["cloud-hosted"],
+      "fix_hint": "Commit both an on-call doc (docs/ONCALL.md) and at least one runbook (docs/runbooks/) before production launch.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "gov-sdlc-04",
+      "title": "Audit/compliance logging implemented",
+      "description": "Security-relevant actions (auth events, config changes, data access) must be audit logged.",
+      "guideline": "Governance",
+      "guideline_section": "SDLC Compliance",
+      "severity": "red",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "grep",
+        "pattern": "(audit.?log|audit_log|compliance.?log|security.?event|structured.?log.*action|emit.*audit)",
+        "target": "**/*.{py,ts,js,go,java,cs}"
+      },
+      "applicable_tags": ["customer-facing", "cloud-hosted"],
+      "fix_hint": "Emit structured audit log events for: login/logout, permission checks, config changes, and data access.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "gov-ext-01",
+      "title": "Monitoring and alerting configured",
+      "description": "Production monitoring and alerting must be configured and verified before launch.",
+      "guideline": "Governance",
+      "guideline_section": "External Attestations",
+      "severity": "red",
+      "type": "external",
+      "confidence": "inconclusive",
+      "verification": {
+        "method": "human_attestation",
+        "attestation_id": "monitoring_alerting"
+      },
+      "applicable_tags": ["cloud-hosted"],
+      "fix_hint": "Attest in .readiness/external-evidence.json that monitoring is configured with a link to your alert rules.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "gov-ext-02",
+      "title": "Production dashboards deployed",
+      "description": "Live production dashboards must be deployed and accessible to the team.",
+      "guideline": "Governance",
+      "guideline_section": "External Attestations",
+      "severity": "yellow",
+      "type": "external",
+      "confidence": "inconclusive",
+      "verification": {
+        "method": "human_attestation",
+        "attestation_id": "production_dashboard"
+      },
+      "applicable_tags": ["cloud-hosted"],
+      "fix_hint": "Attest in .readiness/external-evidence.json with a link to your production dashboard.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "gov-ext-03",
+      "title": "SLOs wired into auto-outage detection",
+      "description": "SLO breaches must trigger automated alerts and outage detection.",
+      "guideline": "Governance",
+      "guideline_section": "External Attestations",
+      "severity": "yellow",
+      "type": "external",
+      "confidence": "inconclusive",
+      "verification": {
+        "method": "human_attestation",
+        "attestation_id": "slo_alerting"
+      },
+      "applicable_tags": ["cloud-hosted", "customer-facing"],
+      "fix_hint": "Attest that SLO breach alerts are configured and linked to your incident management system.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "gov-ext-04",
+      "title": "Incident management team registered",
+      "description": "Service must be registered in the incident management platform with an active on-call rotation.",
+      "guideline": "Governance",
+      "guideline_section": "External Attestations",
+      "severity": "red",
+      "type": "external",
+      "confidence": "inconclusive",
+      "verification": {
+        "method": "human_attestation",
+        "attestation_id": "incident_registration"
+      },
+      "applicable_tags": ["cloud-hosted"],
+      "fix_hint": "Register in your incident management platform (PagerDuty, OpsGenie, ICM) and attest with a link to your rotation.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "gov-ext-05",
+      "title": "Security review sign-off obtained",
+      "description": "A security review must be completed and signed off before production launch.",
+      "guideline": "Governance",
+      "guideline_section": "External Attestations",
+      "severity": "red",
+      "type": "external",
+      "confidence": "inconclusive",
+      "verification": {
+        "method": "human_attestation",
+        "attestation_id": "security_review_signoff"
+      },
+      "applicable_tags": ["customer-facing", "cloud-hosted"],
+      "fix_hint": "Complete a security review with your security team and attest with a link to the review record.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "gov-ext-06",
+      "title": "Privacy review sign-off obtained",
+      "description": "A privacy review must be completed for any service handling personal data.",
+      "guideline": "Governance",
+      "guideline_section": "External Attestations",
+      "severity": "red",
+      "type": "external",
+      "confidence": "inconclusive",
+      "verification": {
+        "method": "human_attestation",
+        "attestation_id": "privacy_review_signoff"
+      },
+      "applicable_tags": ["customer-facing"],
+      "fix_hint": "Complete a privacy review with your privacy team and attest with a link to the review record.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "gov-ext-07",
+      "title": "Capacity review validated",
+      "description": "Capacity planning has been reviewed and validated by the infrastructure team.",
+      "guideline": "Governance",
+      "guideline_section": "External Attestations",
+      "severity": "yellow",
+      "type": "external",
+      "confidence": "inconclusive",
+      "verification": {
+        "method": "human_attestation",
+        "attestation_id": "capacity_review"
+      },
+      "applicable_tags": ["cloud-hosted", "customer-facing"],
+      "fix_hint": "Have your capacity plan reviewed and attest with a link to the review or approval.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "gov-ext-08",
+      "title": "Engineering review sign-off obtained",
+      "description": "Formal engineering review sign-off must be recorded before production launch.",
+      "guideline": "Governance",
+      "guideline_section": "External Attestations",
+      "severity": "red",
+      "type": "external",
+      "confidence": "inconclusive",
+      "verification": {
+        "method": "human_attestation",
+        "attestation_id": "engineering_review_signoff"
+      },
+      "applicable_tags": [],
+      "fix_hint": "Obtain engineering review sign-off and attest with a link to the review record or PR.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "gov-ext-09",
+      "title": "Operational review sign-off obtained",
+      "description": "Formal operational review sign-off must be recorded before production launch.",
+      "guideline": "Governance",
+      "guideline_section": "External Attestations",
+      "severity": "red",
+      "type": "external",
+      "confidence": "inconclusive",
+      "verification": {
+        "method": "human_attestation",
+        "attestation_id": "operational_review_signoff"
+      },
+      "applicable_tags": [],
+      "fix_hint": "Obtain operational review sign-off and attest with a link to the review record.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "gov-ext-10",
+      "title": "Red team or adversarial assessment completed",
+      "description": "For AI or high-risk services, a red team assessment must be completed and recorded.",
+      "guideline": "Governance",
+      "guideline_section": "External Attestations",
+      "severity": "yellow",
+      "type": "external",
+      "confidence": "inconclusive",
+      "verification": {
+        "method": "human_attestation",
+        "attestation_id": "red_team_assessment"
+      },
+      "applicable_tags": ["ai-service", "customer-facing"],
+      "fix_hint": "Complete a red team or adversarial assessment and attest with a link to the findings report.",
+      "doc_link": ""
+    }
+  ]
+}

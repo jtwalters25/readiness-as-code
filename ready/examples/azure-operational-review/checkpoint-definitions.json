@@ -1,0 +1,273 @@
+{
+  "version": "1.0",
+  "pack": "azure-operational-review",
+  "description": "Operational review checks for cloud-hosted services. Covers service health, deployment, on-call readiness, data management, and capacity planning.",
+  "checkpoints": [
+
+    {
+      "id": "ops-svc-01",
+      "title": "SLOs defined with measurable targets",
+      "description": "Service Level Objectives must be defined and documented with measurable targets.",
+      "guideline": "Operational Review",
+      "guideline_section": "Service Health",
+      "severity": "red",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{docs/SLO*,docs/slo*,docs/SERVICE_LEVEL*,SLO.md}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["cloud-hosted", "customer-facing"],
+      "fix_hint": "Create a docs/SLO.md defining availability, latency, and error rate targets with measurement methods.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "ops-svc-02",
+      "title": "Service metadata file exists",
+      "description": "A service metadata file declares ownership, tier, dependencies, and classification.",
+      "guideline": "Operational Review",
+      "guideline_section": "Service Health",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{service.yaml,service.yml,service-metadata.yaml,svc-metadata.yml,.service.yaml,catalog-info.yaml}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["cloud-hosted"],
+      "fix_hint": "Add a service.yaml at the repo root declaring: name, owner, tier, on-call contact, and dependencies.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "ops-deploy-01",
+      "title": "Rollback procedures documented",
+      "description": "Step-by-step rollback procedures must be documented and tested before production launch.",
+      "guideline": "Operational Review",
+      "guideline_section": "Deployment & Rollback",
+      "severity": "red",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{docs/ROLLBACK*,docs/rollback*,docs/runbooks/rollback*,runbooks/rollback*}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["cloud-hosted"],
+      "fix_hint": "Create a docs/ROLLBACK.md with step-by-step instructions for rolling back each type of deployment.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "ops-deploy-02",
+      "title": "Deployment regions documented",
+      "description": "Deployment topology — regions, availability zones, and multi-region strategy — must be documented.",
+      "guideline": "Operational Review",
+      "guideline_section": "Deployment & Rollback",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "grep",
+        "pattern": "(region|location|availability.?zone|multi.?region|geo.?redund)",
+        "target": "{docs/**/*.md,infra/**/*.bicep,infra/**/*.tf,*.yaml}"
+      },
+      "applicable_tags": ["cloud-hosted"],
+      "fix_hint": "Document deployment regions in your README or a dedicated deployment topology doc.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "ops-deploy-03",
+      "title": "Progressive deployment or feature flags configured",
+      "description": "Deployments should use progressive rollout (canary, ring-based, or feature flags) to limit blast radius.",
+      "guideline": "Operational Review",
+      "guideline_section": "Deployment & Rollback",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "grep",
+        "pattern": "(canary|feature.?flag|ring.?deploy|progressive|launchdarkly|flagsmith|unleash|gradual)",
+        "target": "{**/*.py,**/*.ts,**/*.js,**/*.yaml,**/*.yml}"
+      },
+      "applicable_tags": ["cloud-hosted", "customer-facing"],
+      "fix_hint": "Implement feature flags or canary deployments to safely roll out changes to a subset of traffic.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "ops-oncall-01",
+      "title": "On-call rotation documented",
+      "description": "DRI (Directly Responsible Individual) rotation and escalation path must be documented.",
+      "guideline": "Operational Review",
+      "guideline_section": "DRI & On-Call",
+      "severity": "red",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{docs/ONCALL*,docs/oncall*,docs/ON_CALL*,docs/DRI*,docs/runbooks/oncall*,ONCALL.md}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["cloud-hosted"],
+      "fix_hint": "Create a docs/ONCALL.md with the current on-call rotation, escalation path, and bridge/channel details.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "ops-oncall-02",
+      "title": "Post-mortem template exists",
+      "description": "A post-mortem template must be available for incident retrospectives.",
+      "guideline": "Operational Review",
+      "guideline_section": "DRI & On-Call",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{docs/*postmortem*,docs/*post_mortem*,docs/*incident*,docs/templates/postmortem*,postmortem-template*}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["cloud-hosted"],
+      "fix_hint": "Add a post-mortem template to docs/. Include: timeline, impact, root cause, action items.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "ops-oncall-03",
+      "title": "Support channel documented",
+      "description": "The team's support channel (Slack, Teams, email alias) must be documented and discoverable.",
+      "guideline": "Operational Review",
+      "guideline_section": "DRI & On-Call",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "grep",
+        "pattern": "(slack|teams|channel|support.?email|alias|#[a-z].*-support|@[a-z].*team)",
+        "target": "{README.md,docs/ONCALL*,docs/SUPPORT*,SUPPORT.md}"
+      },
+      "applicable_tags": [],
+      "fix_hint": "Add your team's support channel link to the README or a SUPPORT.md file.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "ops-oncall-04",
+      "title": "Safe production access interfaces documented",
+      "description": "How engineers safely access and modify production (safe touch interfaces) must be documented.",
+      "guideline": "Operational Review",
+      "guideline_section": "DRI & On-Call",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{docs/runbooks/**,docs/RUNBOOK*,runbooks/**,docs/safe-*,docs/production-access*}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["cloud-hosted"],
+      "fix_hint": "Create runbooks describing how to safely interact with production: approved query patterns, config changes, and emergency procedures.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "ops-data-01",
+      "title": "Data retention policies documented",
+      "description": "Data retention and deletion policies must be documented for all data stores.",
+      "guideline": "Operational Review",
+      "guideline_section": "Data & Capacity",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{docs/DATA_RETENTION*,docs/data-retention*,docs/data_policy*,docs/PRIVACY*}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["customer-facing"],
+      "fix_hint": "Document data retention periods and deletion procedures for each data store in docs/DATA_RETENTION.md.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "ops-data-02",
+      "title": "Failure modes documented",
+      "description": "Known failure modes and degraded-state behaviors must be documented.",
+      "guideline": "Operational Review",
+      "guideline_section": "Data & Capacity",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{docs/FAILURE_MODES*,docs/failure-modes*,docs/DEGRADED*,docs/resilience*}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["cloud-hosted"],
+      "fix_hint": "Document how the service behaves when dependencies fail. Include: what degrades gracefully, what fails hard, and recovery paths.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "ops-data-03",
+      "title": "RTO/RPO documented for critical data stores",
+      "description": "Recovery Time and Recovery Point Objectives must be defined for all critical data stores.",
+      "guideline": "Operational Review",
+      "guideline_section": "Data & Capacity",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "grep",
+        "pattern": "(RTO|RPO|recovery.?time|recovery.?point|backup.?retention)",
+        "target": "{docs/**/*.md,SLO.md,docs/SLO*}"
+      },
+      "applicable_tags": ["cloud-hosted", "customer-facing"],
+      "fix_hint": "Add RTO and RPO targets to your SLO doc or a dedicated disaster recovery doc.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "ops-data-04",
+      "title": "Capacity planning documented",
+      "description": "Expected load, scaling limits, and capacity headroom must be documented.",
+      "guideline": "Operational Review",
+      "guideline_section": "Data & Capacity",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{docs/CAPACITY*,docs/capacity*,docs/scaling*,docs/SCALING*}",
+        "min_matches": 1
+      },
+      "applicable_tags": ["cloud-hosted", "customer-facing"],
+      "fix_hint": "Document peak expected traffic, scaling triggers, and headroom. Include auto-scale config or manual scaling procedures.",
+      "doc_link": ""
+    },
+
+    {
+      "id": "ops-quality-01",
+      "title": "Testing strategy documented",
+      "description": "The overall testing strategy — what's covered, at what layers, and what's excluded — must be documented.",
+      "guideline": "Operational Review",
+      "guideline_section": "Testing & Quality",
+      "severity": "yellow",
+      "type": "code",
+      "confidence": "likely",
+      "verification": {
+        "method": "glob",
+        "pattern": "{docs/TESTING*,docs/testing*,docs/TEST_STRATEGY*,docs/quality*}",
+        "min_matches": 1
+      },
+      "applicable_tags": [],
+      "fix_hint": "Create a docs/TESTING.md describing your test pyramid: unit, integration, e2e, load, chaos.",
+      "doc_link": ""
+    }
+  ]
+}
