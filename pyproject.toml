@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "readiness-as-code"
-version = "0.5.0"
+version = "0.6.0"
 description = "Know before you ship — continuous readiness as a folder in your repo."
 readme = "README.md"
 license = {text = "MIT"}
