@@ -33,7 +33,7 @@ except ImportError:
 # Allow running from repo root or as installed package
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.validators import run_scan, Status, Severity
+from ready.validators import run_scan, Status, Severity
 
 mcp = FastMCP(
     "ready",

@@ -35,7 +35,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.validators import run_scan, Status, Severity
+from ready.validators import run_scan, Status, Severity
 
 
 READINESS_DIR = ".readiness"
@@ -1221,13 +1221,13 @@ def _load_adapter(adapter_name: str):
     """Instantiate the requested work item adapter."""
     name = adapter_name.lower()
     if name in ("github", "github_issues"):
-        from src.adapters.github_issues import GitHubIssuesAdapter
+        from ready.adapters.github_issues import GitHubIssuesAdapter
         return GitHubIssuesAdapter()
     elif name in ("ado", "azure", "azuredevops"):
-        from src.adapters.ado import AzureDevOpsAdapter
+        from ready.adapters.ado import AzureDevOpsAdapter
         return AzureDevOpsAdapter()
     elif name == "jira":
-        from src.adapters.jira import JiraAdapter
+        from ready.adapters.jira import JiraAdapter
         return JiraAdapter()
     else:
         raise ValueError(f"Unknown adapter '{adapter_name}'. Choices: github, ado, jira")
@@ -1280,7 +1280,7 @@ def cmd_items(args):
             service_tags = cfg.get("service_tags")
             service_name = cfg.get("service_name")
 
-    from src.validators import run_scan, Status, Severity
+    from ready.validators import run_scan, Status, Severity
     result = run_scan(
         repo_root=repo_root,
         definitions_path=definitions_path,
@@ -1329,7 +1329,7 @@ def cmd_items(args):
                     print(f"    {DIM}Skipped.{RESET}")
                     continue
 
-            from src.adapters import WorkItemDraft
+            from ready.adapters import WorkItemDraft
             draft = WorkItemDraft(
                 checkpoint_id=r.checkpoint_id,
                 title=r.title,
