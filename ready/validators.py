@@ -399,6 +399,7 @@ def run_scan(
     exceptions_path: str | None = None,
     service_tags: list[str] | None = None,
     service_name: str | None = None,
+    on_progress: "callable | None" = None,
 ) -> ScanResult:
     """Run a full scan against a repo and return structured results."""
 
@@ -419,7 +420,11 @@ def run_scan(
         service_name = os.path.basename(os.path.abspath(repo_root))
 
     results: list[CheckResult] = []
-    for checkpoint in definitions.get("checkpoints", []):
+    checkpoints = definitions.get("checkpoints", [])
+    total = len(checkpoints)
+    for i, checkpoint in enumerate(checkpoints, 1):
+        if on_progress:
+            on_progress(i, total, checkpoint.get("title", checkpoint.get("id", "")))
         result = evaluate_checkpoint(
             checkpoint, repo_root, evidence_registry, exceptions_data, service_tags
         )

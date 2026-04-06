@@ -579,22 +579,15 @@ def cmd_scan(args):
             print(f"\n{DIM}Run 'ready doctor' for a full setup check.{RESET}")
             return 1
 
-    import threading, itertools, time as _time
+    show_progress = not getattr(args, "json", False)
 
-    _done = threading.Event()
-
-    def _spinner():
-        frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-        for f in itertools.cycle(frames):
-            if _done.is_set():
-                break
-            print(f"\r{DIM}{f} Scanning...{RESET}", end="", flush=True)
-            _time.sleep(0.08)
-        print("\r" + " " * 20 + "\r", end="", flush=True)
-
-    spin_thread = threading.Thread(target=_spinner, daemon=True)
-    if not getattr(args, "json", False):
-        spin_thread.start()
+    def _on_progress(current: int, total: int, title: str) -> None:
+        if not show_progress:
+            return
+        label = title[:40] + "…" if len(title) > 40 else title
+        line = f"\r{DIM}Scanning {current}/{total}  {label}{RESET}"
+        # Pad to 72 chars so previous longer lines are fully overwritten
+        print(f"{line:<72}", end="", flush=True)
 
     try:
         result = run_scan(
@@ -604,22 +597,23 @@ def cmd_scan(args):
             exceptions_path=exceptions_path,
             service_tags=service_tags,
             service_name=service_name,
+            on_progress=_on_progress,
         )
     except json.JSONDecodeError as e:
-        _done.set()
+        print(f"\r{' ' * 72}\r", end="", flush=True)
         print(f"{RED}✗ JSON parse error in a .readiness/ file:{RESET}")
         print(f"  {e}")
         print(f"\n{DIM}Run 'ready doctor' to identify which file has the problem.{RESET}")
         return 1
     except Exception as e:
-        _done.set()
+        print(f"\r{' ' * 72}\r", end="", flush=True)
         print(f"{RED}✗ Scan failed unexpectedly:{RESET} {e}")
         print(f"\n{DIM}Run 'ready doctor' to check your setup, or 'ready scan --verbose' for more detail.{RESET}")
         return 1
-    finally:
-        _done.set()
-        if spin_thread.is_alive():
-            spin_thread.join(timeout=0.5)
+
+    # Clear the progress line before printing results
+    if show_progress:
+        print(f"\r{' ' * 72}\r", end="", flush=True)
 
     # JSON output (early return — machine consumers get stable format)
     if args.json:
