@@ -27,6 +27,7 @@ import argparse
 import datetime
 import json
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -1916,6 +1917,437 @@ def _aggregate_html(args, all_results, services, scores,
     return 0
 
 
+def _infer_stack(repo_root: str) -> dict:
+    from ready.validators import SKIP_DIRS as _SKIP_DIRS
+    from pathlib import Path as _Path
+
+    def _is_skipped_local(path: str) -> bool:
+        return any(part in _SKIP_DIRS for part in _Path(path).parts)
+    """
+    Deeply analyze a repo to produce a structured profile:
+      - language / runtime
+      - frameworks detected
+      - dependency manifest contents
+      - ADR / decision docs present
+      - has routes / API surface
+      - has migrations
+      - has docker / k8s config
+    """
+    files = set(os.listdir(repo_root))
+    profile = {
+        "language": "unknown",
+        "frameworks": [],
+        "dependencies": [],
+        "has_adr": False,
+        "adr_paths": [],
+        "has_migrations": False,
+        "has_docker": False,
+        "has_k8s": False,
+        "has_routes": False,
+        "has_auth": False,
+        "has_tests": False,
+        "manifest_file": None,
+    }
+
+    # ── Language + dependencies ───────────────────────────────────────────────
+    if "package.json" in files:
+        profile["language"] = "nodejs"
+        profile["manifest_file"] = "package.json"
+        try:
+            with open(os.path.join(repo_root, "package.json")) as f:
+                pkg = json.load(f)
+            deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
+            profile["dependencies"] = list(deps.keys())
+            for fw, name in [
+                ("express", "Express"), ("fastify", "Fastify"), ("koa", "Koa"),
+                ("@nestjs/core", "NestJS"), ("next", "Next.js"), ("@hapi/hapi", "Hapi"),
+            ]:
+                if fw in deps:
+                    profile["frameworks"].append(name)
+            if any(d in deps for d in ("passport", "jsonwebtoken", "@auth0/auth0-spa-js", "next-auth")):
+                profile["has_auth"] = True
+        except Exception:
+            pass
+
+    for fname in ("requirements.txt", "requirements-dev.txt", "pyproject.toml"):
+        fpath = os.path.join(repo_root, fname)
+        if os.path.isfile(fpath):
+            profile["language"] = "python"
+            profile["manifest_file"] = fname
+            try:
+                with open(fpath) as f:
+                    content = f.read()
+                profile["dependencies"] = [
+                    l.split("==")[0].split(">=")[0].split("[")[0].strip()
+                    for l in content.splitlines()
+                    if l.strip() and not l.startswith("#") and not l.startswith("[")
+                ]
+                for fw, name in [
+                    ("fastapi", "FastAPI"), ("flask", "Flask"), ("django", "Django"),
+                    ("starlette", "Starlette"), ("tornado", "Tornado"), ("aiohttp", "aiohttp"),
+                ]:
+                    if fw in content.lower():
+                        profile["frameworks"].append(name)
+                if any(a in content.lower() for a in ("authlib", "flask-login", "djangorestframework", "jwt", "oauth")):
+                    profile["has_auth"] = True
+            except Exception:
+                pass
+            break
+
+    if "go.mod" in files:
+        profile["language"] = "go"
+        profile["manifest_file"] = "go.mod"
+        try:
+            with open(os.path.join(repo_root, "go.mod")) as f:
+                content = f.read()
+            for fw, name in [
+                ("gin-gonic", "Gin"), ("echo", "Echo"), ("fiber", "Fiber"),
+                ("gorilla/mux", "Gorilla Mux"), ("chi", "chi"),
+            ]:
+                if fw in content:
+                    profile["frameworks"].append(name)
+        except Exception:
+            pass
+
+    # ── Infrastructure ────────────────────────────────────────────────────────
+    docker_files = {"Dockerfile", "docker-compose.yml", "docker-compose.yaml", ".dockerignore"}
+    if docker_files & files:
+        profile["has_docker"] = True
+
+    k8s_dirs = {"k8s", "kubernetes", "helm", "charts", "deploy", "infra"}
+    if k8s_dirs & files or any(
+        f.endswith(".yaml") or f.endswith(".yml") for f in files
+        if "deployment" in f.lower() or "service" in f.lower()
+    ):
+        profile["has_k8s"] = True
+
+    # ── ADR / decision docs ───────────────────────────────────────────────────
+    adr_dir_candidates = ["docs/adr", "docs/decisions", "docs/architecture", "decisions", "adr"]
+    for d in adr_dir_candidates:
+        full = os.path.join(repo_root, d)
+        if os.path.isdir(full):
+            adr_files = [
+                os.path.join(d, f) for f in os.listdir(full)
+                if f.endswith(".md") or f.endswith(".txt")
+            ]
+            if adr_files:
+                profile["has_adr"] = True
+                profile["adr_paths"] = adr_files[:3]
+                break
+
+    # Also check root-level ADR-*.md pattern
+    if not profile["has_adr"]:
+        adr_root = [f for f in files if re.match(r"(ADR|adr|DECISION|RFC)[-_]?\d", f)]
+        if adr_root:
+            profile["has_adr"] = True
+            profile["adr_paths"] = adr_root[:3]
+
+    # ── Tests ─────────────────────────────────────────────────────────────────
+    test_dirs = {"tests", "test", "__tests__", "spec", "specs"}
+    if test_dirs & files:
+        profile["has_tests"] = True
+
+    # ── Routes / API surface ──────────────────────────────────────────────────
+    src_dirs = [d for d in ("src", "app", "api", "lib") if os.path.isdir(os.path.join(repo_root, d))]
+    route_patterns = [r"@app\.route", r"router\.(get|post|put|delete|patch)", r"@(Get|Post|Put|Delete|Patch)\(", r"func.*Handler"]
+    for src_dir in src_dirs:
+        for root, _, fnames in os.walk(os.path.join(repo_root, src_dir)):
+            if _is_skipped_local(os.path.relpath(root, repo_root)):
+                continue
+            for fname in fnames:
+                if not fname.endswith((".py", ".ts", ".js", ".go")):
+                    continue
+                try:
+                    with open(os.path.join(root, fname), encoding="utf-8", errors="ignore") as f:
+                        content = f.read()
+                    if any(re.search(p, content) for p in route_patterns):
+                        profile["has_routes"] = True
+                        break
+                except Exception:
+                    continue
+            if profile["has_routes"]:
+                break
+
+    # ── Migrations ────────────────────────────────────────────────────────────
+    migration_dirs = {"migrations", "migrate", "db/migrate", "alembic"}
+    if migration_dirs & files or os.path.isdir(os.path.join(repo_root, "alembic")):
+        profile["has_migrations"] = True
+
+    return profile
+
+
+def _build_checkpoint_proposals(profile: dict) -> list[dict]:
+    """
+    Given a stack profile, return a list of proposed checkpoint definitions
+    tailored to what was detected. Each item is a ready-to-write checkpoint dict.
+    """
+    proposals = []
+    lang = profile["language"]
+    frameworks = profile["frameworks"]
+    deps = [d.lower() for d in profile["dependencies"]]
+
+    def cp(id_, title, method, pattern_or_note, severity="yellow", section="Inferred", fix="", rationale=""):
+        base = {
+            "id": id_,
+            "title": title,
+            "severity": severity,
+            "type": "code",
+            "confidence": "likely",
+            "guideline": "Inferred from codebase",
+            "guideline_section": section,
+            "fix_hint": fix,
+            "_rationale": rationale,
+        }
+        if method == "grep":
+            base["verification"] = {"method": "grep", "pattern": pattern_or_note, "target": "**/*"}
+        elif method == "file_exists":
+            base["verification"] = {"method": "file_exists", "pattern": pattern_or_note}
+        elif method == "glob":
+            base["verification"] = {"method": "glob", "pattern": pattern_or_note}
+        elif method == "note":
+            base["type"] = "external"
+            base["confidence"] = "inconclusive"
+            base["verification"] = {"method": "human_attestation"}
+        return base
+
+    # ── Dependency pinning ────────────────────────────────────────────────────
+    if lang == "python" and profile["manifest_file"] == "requirements.txt":
+        proposals.append(cp(
+            "infer-dep-001", "Dependencies are pinned to exact versions",
+            "grep", r"==\d",
+            severity="yellow", section="Dependencies",
+            fix="Pin all dependencies to exact versions (e.g. flask==3.0.0) for reproducible builds.",
+            rationale="Detected requirements.txt — unpinned deps cause environment drift.",
+        ))
+
+    if lang == "nodejs":
+        proposals.append(cp(
+            "infer-dep-002", "package-lock.json committed",
+            "file_exists", "package-lock.json",
+            severity="red", section="Dependencies",
+            fix="Commit package-lock.json to lock dependency versions.",
+            rationale="Node.js project detected — lock file ensures reproducible installs.",
+        ))
+
+    # ── ADR / decision docs ───────────────────────────────────────────────────
+    if not profile["has_adr"]:
+        proposals.append(cp(
+            "infer-adr-001", "Architecture decision records (ADRs) exist",
+            "note", "",
+            severity="yellow", section="Documentation",
+            fix="Create a docs/adr/ directory with at least one ADR documenting a key architectural decision.",
+            rationale="No ADR directory or decision docs found. ADRs capture the why behind architecture choices.",
+        ))
+    else:
+        proposals.append(cp(
+            "infer-adr-002", "ADR directory has recent decisions",
+            "glob", "docs/adr/*.md",
+            severity="yellow", section="Documentation",
+            fix="Ensure ADRs are kept current. Add new ADRs for recent architectural changes.",
+            rationale=f"ADRs found at: {', '.join(profile['adr_paths'][:2])}",
+        ))
+
+    # ── Auth ──────────────────────────────────────────────────────────────────
+    if profile["has_routes"] and not profile["has_auth"]:
+        proposals.append(cp(
+            "infer-auth-001", "Authentication library present",
+            "grep", r"(auth|jwt|oauth|passport|token|bearer)",
+            severity="red", section="Security",
+            fix="Ensure all endpoints are protected. Add an authentication library appropriate for your stack.",
+            rationale="Routes detected but no auth library found in dependencies.",
+        ))
+
+    if profile["has_auth"]:
+        proposals.append(cp(
+            "infer-auth-002", "Auth applied to route handlers",
+            "grep", r"(require_auth|@login_required|authenticate|authorize|middleware.*auth|auth.*middleware)",
+            severity="red", section="Security",
+            fix="Verify auth middleware is applied to all protected routes.",
+            rationale="Auth library detected — checking it's applied to handlers.",
+        ))
+
+    # ── Framework-specific ────────────────────────────────────────────────────
+    if "Flask" in frameworks:
+        proposals.append(cp(
+            "infer-flask-001", "Flask debug mode disabled in production config",
+            "grep", r"DEBUG\s*=\s*False",
+            severity="red", section="Configuration",
+            fix="Set DEBUG=False in your production config. Debug mode exposes internals.",
+            rationale="Flask detected — debug mode is a common misconfiguration in production.",
+        ))
+        proposals.append(cp(
+            "infer-flask-002", "Flask secret key sourced from environment",
+            "grep", r"SECRET_KEY.*os\.(environ|getenv)",
+            severity="red", section="Security",
+            fix="Set SECRET_KEY from an environment variable, not hardcoded in source.",
+            rationale="Flask session security depends on SECRET_KEY being secret.",
+        ))
+
+    if "Django" in frameworks:
+        proposals.append(cp(
+            "infer-django-001", "Django settings use environment variables for secrets",
+            "grep", r"os\.(environ|getenv).*SECRET",
+            severity="red", section="Security",
+            fix="Load SECRET_KEY and database credentials from environment variables.",
+            rationale="Django detected — settings.py often contains hardcoded secrets.",
+        ))
+        proposals.append(cp(
+            "infer-django-002", "Django migrations committed",
+            "glob", "**/migrations/0*.py",
+            severity="yellow", section="Database",
+            fix="Commit migration files so schema changes are tracked and reproducible.",
+            rationale="Django project detected — migrations should be version controlled.",
+        ))
+
+    if "FastAPI" in frameworks:
+        proposals.append(cp(
+            "infer-fastapi-001", "FastAPI app has dependency injection for auth",
+            "grep", r"Depends\(",
+            severity="yellow", section="Security",
+            fix="Use FastAPI's Depends() for auth dependencies to ensure consistent enforcement.",
+            rationale="FastAPI detected — Depends() is the standard pattern for auth middleware.",
+        ))
+
+    if "Express" in frameworks or "NestJS" in frameworks:
+        proposals.append(cp(
+            "infer-node-001", "Helmet.js or security middleware present",
+            "grep", r"helmet|cors|express-rate-limit",
+            severity="red", section="Security",
+            fix="Add helmet() middleware to set secure HTTP headers.",
+            rationale="Express/NestJS detected — HTTP security headers are often missed.",
+        ))
+
+    # ── Docker ────────────────────────────────────────────────────────────────
+    if profile["has_docker"]:
+        proposals.append(cp(
+            "infer-docker-001", "Dockerfile uses non-root user",
+            "grep", r"USER\s+(?!root)",
+            severity="yellow", section="Security",
+            fix="Add a USER instruction in your Dockerfile to run as a non-root user.",
+            rationale="Dockerfile detected — running as root inside containers is a security risk.",
+        ))
+        proposals.append(cp(
+            "infer-docker-002", "Dockerfile pins base image version",
+            "grep", r"FROM\s+\S+:\S+(?<!:latest)",
+            severity="yellow", section="Dependencies",
+            fix="Pin your base image to a specific version (e.g. python:3.11-slim, not python:latest).",
+            rationale="Unpinned base images can break builds when upstream images change.",
+        ))
+
+    # ── Migrations ────────────────────────────────────────────────────────────
+    if profile["has_migrations"]:
+        proposals.append(cp(
+            "infer-db-001", "Database migrations committed",
+            "glob", "**/migrations/*.py,**/migrations/*.sql",
+            severity="red", section="Database",
+            fix="Ensure all migration files are committed and reviewed before deployment.",
+            rationale="Migration directory detected — uncommitted migrations cause production drift.",
+        ))
+
+    return proposals
+
+
+def cmd_infer(args):
+    """
+    Analyze the codebase to infer tailored checkpoint proposals,
+    then present each one for human approval before writing to
+    checkpoint-definitions.json.
+    """
+    repo_root = find_repo_root()
+    readiness_dir = os.path.join(repo_root, READINESS_DIR)
+
+    if not os.path.isdir(readiness_dir):
+        print(f"{RED}✗ No {READINESS_DIR}/ found. Run 'ready init' first.{RESET}")
+        return 1
+
+    definitions_path = os.path.join(readiness_dir, DEFINITIONS_FILE)
+    if not os.path.isfile(definitions_path):
+        print(f"{RED}✗ No checkpoint-definitions.json found. Run 'ready init' first.{RESET}")
+        return 1
+
+    print(f"\n{BOLD}Analyzing codebase...{RESET}", flush=True)
+    profile = _infer_stack(repo_root)
+
+    # Print what was detected
+    lang = profile["language"].capitalize() if profile["language"] != "unknown" else "Unknown"
+    frameworks = ", ".join(profile["frameworks"]) if profile["frameworks"] else "none detected"
+    print(f"\n{BOLD}Stack profile{RESET}")
+    print(f"  Language:    {CYAN}{lang}{RESET}")
+    print(f"  Frameworks:  {CYAN}{frameworks}{RESET}")
+    if profile["manifest_file"]:
+        dep_count = len(profile["dependencies"])
+        print(f"  Manifest:    {CYAN}{profile['manifest_file']}{RESET} ({dep_count} dependencies)")
+    print(f"  ADRs:        {CYAN}{'yes — ' + ', '.join(profile['adr_paths'][:2]) if profile['has_adr'] else 'none found'}{RESET}")
+    print(f"  Docker:      {CYAN}{'yes' if profile['has_docker'] else 'no'}{RESET}")
+    print(f"  Auth:        {CYAN}{'detected' if profile['has_auth'] else 'not detected'}{RESET}")
+    print(f"  Routes/API:  {CYAN}{'detected' if profile['has_routes'] else 'not detected'}{RESET}")
+    print(f"  Migrations:  {CYAN}{'detected' if profile['has_migrations'] else 'not detected'}{RESET}")
+
+    proposals = _build_checkpoint_proposals(profile)
+    if not proposals:
+        print(f"\n{GREEN}✓ No additional checkpoints to propose for this stack.{RESET}")
+        return 0
+
+    # Load existing checkpoint IDs to avoid duplicates
+    with open(definitions_path) as f:
+        existing = json.load(f)
+    existing_ids = {cp.get("id") for cp in existing.get("checkpoints", [])}
+
+    proposals = [p for p in proposals if p["id"] not in existing_ids]
+    if not proposals:
+        print(f"\n{GREEN}✓ All inferred checkpoints already exist in your definitions.{RESET}")
+        return 0
+
+    print(f"\n{BOLD}{len(proposals)} checkpoint(s) proposed based on your stack{RESET}")
+    print(f"{DIM}Review each one. [y] approve  [n] skip  [e] edit title before approving{RESET}\n")
+
+    approved = []
+    for i, proposal in enumerate(proposals, 1):
+        rationale = proposal.pop("_rationale", "")
+        severity_color = RED if proposal["severity"] == "red" else YELLOW
+        print(f"  {DIM}({i}/{len(proposals)}){RESET} {severity_color}[{proposal['severity'].upper()}]{RESET} {BOLD}{proposal['title']}{RESET}")
+        if rationale:
+            print(f"    {DIM}Why: {rationale}{RESET}")
+        if proposal.get("fix_hint"):
+            print(f"    {DIM}Fix: {proposal['fix_hint']}{RESET}")
+
+        try:
+            answer = input(f"  Add this checkpoint? [y/N/e] ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+
+        if answer == "y":
+            approved.append(proposal)
+            print(f"    {GREEN}✓ Added{RESET}")
+        elif answer == "e":
+            try:
+                new_title = input(f"  New title [{proposal['title']}]: ").strip()
+                if new_title:
+                    proposal["title"] = new_title
+            except (EOFError, KeyboardInterrupt):
+                pass
+            approved.append(proposal)
+            print(f"    {GREEN}✓ Added{RESET}")
+        else:
+            print(f"    {DIM}Skipped{RESET}")
+        print()
+
+    if not approved:
+        print(f"{YELLOW}No checkpoints approved — nothing written.{RESET}")
+        return 0
+
+    # Append approved checkpoints to definitions
+    existing["checkpoints"].extend(approved)
+    with open(definitions_path, "w") as f:
+        json.dump(existing, f, indent=2)
+        f.write("\n")
+
+    print(f"{GREEN}✓ {len(approved)} checkpoint(s) added to {DEFINITIONS_FILE}{RESET}")
+    print(f"{DIM}Run 'ready scan' to see your updated score.{RESET}\n")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="ready",
@@ -2000,6 +2432,12 @@ def main():
     # audit
     subparsers.add_parser("audit", help="Audit exception health, definition staleness, and score health")
 
+    # infer
+    subparsers.add_parser(
+        "infer",
+        help="Analyze codebase and propose tailored checkpoints for human approval",
+    )
+
     # aggregate
     agg_parser = subparsers.add_parser("aggregate", help="Cross-repo heatmap")
     agg_parser.add_argument("paths", nargs="*", help="Paths to baseline files")
@@ -2039,6 +2477,8 @@ def main():
         sys.exit(cmd_items(args))
     elif args.command == "audit":
         sys.exit(cmd_audit(args))
+    elif args.command == "infer":
+        sys.exit(cmd_infer(args))
     elif args.command == "aggregate":
         sys.exit(cmd_aggregate(args))
     else:
