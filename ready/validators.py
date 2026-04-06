@@ -109,8 +109,23 @@ class ScanResult:
         return self.failing_red == 0
 
 
+SKIP_DIRS = {
+    ".git", "node_modules", ".venv", "venv", ".env",
+    "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache",
+    "dist", "build", "bin", "obj", "out", "target",
+    ".idea", ".vscode", ".vs",
+    "vendor", "third_party", "bower_components",
+}
+
+
+def _is_skipped(path: str) -> bool:
+    """Return True if any path component is in SKIP_DIRS."""
+    return any(part in SKIP_DIRS for part in Path(path).parts)
+
+
 def _resolve_glob(pattern: str, repo_root: str) -> list[str]:
-    """Resolve a glob pattern against the repo, supporting brace expansion."""
+    """Resolve a glob pattern against the repo, supporting brace expansion.
+    Automatically excludes dependency and tooling directories."""
     # Handle brace expansion: {a,b,c} -> expand to multiple patterns
     if "{" in pattern and "}" in pattern:
         brace_match = re.search(r"\{([^}]+)\}", pattern)
@@ -125,7 +140,12 @@ def _resolve_glob(pattern: str, repo_root: str) -> list[str]:
             return results
 
     full_pattern = os.path.join(repo_root, pattern)
-    return glob.glob(full_pattern, recursive=True)
+    matches = glob.glob(full_pattern, recursive=True)
+    repo_root_abs = os.path.abspath(repo_root)
+    return [
+        m for m in matches
+        if not _is_skipped(os.path.relpath(m, repo_root_abs))
+    ]
 
 
 def _verify_file_exists(verification: dict, repo_root: str) -> tuple[bool, list[str]]:
