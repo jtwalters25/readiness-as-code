@@ -18,7 +18,9 @@ Usage:
     ready history [BASELINES...]   Show readiness trend from baseline snapshots
     ready items --create           Propose + create work items
     ready items --verify           Cross-check work items vs code
-    ready aggregate PATHS...       Cross-repo heatmap
+    ready audit                    Audit exception health, definition staleness, and score health
+    ready aggregate PATHS...       Cross-repo heatmap (CLI)
+    ready aggregate PATHS... --html  Generate self-contained HTML heatmap report
 """
 
 import argparse
@@ -713,6 +715,25 @@ def cmd_scan(args):
                 print(f"  {DIM}  {r.title}{RESET}")
             print()
 
+        # Flag checkpoint definitions past their review_by date
+        if os.path.isfile(definitions_path):
+            try:
+                with open(definitions_path) as _f:
+                    _defs = json.load(_f)
+                _today = datetime.date.today()
+                _stale = [
+                    cp for cp in _defs.get("checkpoints", [])
+                    if cp.get("review_by") and datetime.date.fromisoformat(cp["review_by"]) < _today
+                ]
+                if _stale:
+                    print(f"{YELLOW}definition review overdue ({len(_stale)}){RESET}")
+                    for cp in _stale:
+                        print(f"  {YELLOW}⏰{RESET} [{cp['id']}] {cp.get('title', '')}  {DIM}review_by {cp['review_by']}{RESET}")
+                    print(f"  {DIM}Run 'ready audit' for a full health report.{RESET}")
+                    print()
+            except (ValueError, KeyError):
+                pass
+
     else:
         # Default: blocking items with first evidence + fix hint
         if red_fails:
@@ -1404,6 +1425,244 @@ def cmd_items(args):
         return 0
 
 
+def cmd_audit(args):
+    """Audit exception health, definition staleness, and score health."""
+    repo_root = find_repo_root()
+    readiness_dir = os.path.join(repo_root, READINESS_DIR)
+
+    if not os.path.isdir(readiness_dir):
+        print(f"{RED}✗ No {READINESS_DIR}/ found. Run 'ready init' first.{RESET}")
+        return 1
+
+    today = datetime.date.today()
+    recommendations: list[str] = []
+    has_critical = False
+
+    # Load data
+    exceptions_path = os.path.join(readiness_dir, EXCEPTIONS_FILE)
+    definitions_path = os.path.join(readiness_dir, DEFINITIONS_FILE)
+    baseline_path = os.path.join(readiness_dir, BASELINE_FILE)
+    config_path = os.path.join(readiness_dir, "config.json")
+
+    exceptions = []
+    if os.path.isfile(exceptions_path):
+        with open(exceptions_path) as f:
+            exceptions = json.load(f).get("exceptions", [])
+
+    checkpoints = []
+    if os.path.isfile(definitions_path):
+        with open(definitions_path) as f:
+            checkpoints = json.load(f).get("checkpoints", [])
+
+    baseline = None
+    if os.path.isfile(baseline_path):
+        with open(baseline_path) as f:
+            baseline = json.load(f)
+
+    service_name = os.path.basename(repo_root)
+    if os.path.isfile(config_path):
+        with open(config_path) as f:
+            service_name = json.load(f).get("service_name", service_name)
+
+    print(f"\n{BOLD}── Readiness Audit {'─' * 42}{RESET}")
+    print(f"  Service: {BOLD}{service_name}{RESET}    As of: {today}")
+    print()
+
+    # ── Exception Health ──────────────────────────────────────────────────────
+    print(f"{BOLD}Exception Health{RESET}")
+
+    if not exceptions:
+        print(f"  {GREEN}✓ No exceptions recorded.{RESET}")
+    else:
+        total_cp = len(checkpoints)
+        total_exc = len(exceptions)
+        exc_pct = round(total_exc / total_cp * 100) if total_cp else 0
+
+        age_buckets: dict[str, list] = {"<30d": [], "30–90d": [], "90–180d": [], ">180d": [], "unknown": []}
+        expiring_soon: list = []
+        expired_list: list = []
+
+        for exc in exceptions:
+            accepted_str = exc.get("accepted_date", exc.get("created", ""))
+            try:
+                accepted = datetime.date.fromisoformat(accepted_str)
+                age_days = (today - accepted).days
+                if age_days < 30:
+                    age_buckets["<30d"].append(exc)
+                elif age_days < 90:
+                    age_buckets["30–90d"].append(exc)
+                elif age_days < 180:
+                    age_buckets["90–180d"].append(exc)
+                else:
+                    age_buckets[">180d"].append(exc)
+            except (ValueError, TypeError):
+                age_buckets["unknown"].append(exc)
+
+            expires_str = exc.get("expires", "")
+            try:
+                exp_date = datetime.date.fromisoformat(expires_str)
+                days_left = (exp_date - today).days
+                if days_left < 0:
+                    expired_list.append(exc)
+                elif days_left <= 30:
+                    expiring_soon.append(exc)
+            except (ValueError, TypeError):
+                pass
+
+        print(f"  Total: {BOLD}{total_exc}{RESET}  ({exc_pct}% of {total_cp} checkpoints excepted)")
+
+        age_parts = []
+        colors = {"<30d": GREEN, "30–90d": CYAN, "90–180d": YELLOW, ">180d": RED, "unknown": DIM}
+        for bucket, color in colors.items():
+            n = len(age_buckets[bucket])
+            if n:
+                age_parts.append(f"{color}{bucket}: {n}{RESET}")
+        if age_parts:
+            print(f"  Age distribution:  {' · '.join(age_parts)}")
+
+        if expiring_soon:
+            print(f"  {YELLOW}⚠  Expiring soon (≤30 days): {len(expiring_soon)}{RESET}")
+            for exc in expiring_soon:
+                cp_id = exc.get("checkpoint_id", "?")
+                print(f"    {DIM}[{cp_id}] expires {exc.get('expires', '')}{RESET}")
+
+        if expired_list:
+            has_critical = True
+            print(f"  {RED}✗  Expired (re-evaluation required): {len(expired_list)}{RESET}")
+            for exc in expired_list:
+                cp_id = exc.get("checkpoint_id", "?")
+                print(f"    {DIM}[{cp_id}] expired {exc.get('expires', '')}{RESET}")
+            recommendations.append(
+                f"Re-evaluate {len(expired_list)} expired exception(s) — run 'ready decisions' to review them."
+            )
+
+        if len(age_buckets[">180d"]) > 0:
+            recommendations.append(
+                f"{len(age_buckets['>180d'])} exception(s) are >180 days old — verify they still reflect deliberate decisions."
+            )
+
+        if exc_pct > 30:
+            recommendations.append(
+                f"Exception rate is {exc_pct}% — high rates can hide systemic gaps. "
+                "Consider addressing root causes rather than accepting indefinitely."
+            )
+
+    print()
+
+    # ── Definition Health ─────────────────────────────────────────────────────
+    print(f"{BOLD}Definition Health{RESET}")
+
+    if not checkpoints:
+        print(f"  {RED}✗ No checkpoint definitions found.{RESET}")
+        recommendations.append("Add checkpoint definitions — run 'ready init' to scaffold a starter set.")
+    else:
+        total_cp = len(checkpoints)
+        print(f"  Checkpoints: {BOLD}{total_cp}{RESET}")
+
+        # File age
+        if os.path.isfile(definitions_path):
+            try:
+                mtime = os.path.getmtime(definitions_path)
+                mdate = datetime.date.fromtimestamp(mtime)
+                age_days = (today - mdate).days
+                color = GREEN if age_days < 90 else (YELLOW if age_days < 180 else RED)
+                print(f"  Last modified: {color}{mdate}  ({age_days}d ago){RESET}")
+                if age_days > 180:
+                    recommendations.append(
+                        f"Checkpoint definitions haven't been modified in {age_days} days — "
+                        "review whether they still reflect current engineering standards."
+                    )
+            except OSError:
+                pass
+
+        # review_by coverage
+        with_review_by = [cp for cp in checkpoints if cp.get("review_by")]
+        past_review_by = []
+        for cp in with_review_by:
+            try:
+                if datetime.date.fromisoformat(cp["review_by"]) < today:
+                    past_review_by.append(cp)
+            except (ValueError, TypeError):
+                pass
+
+        rb_pct = round(len(with_review_by) / total_cp * 100)
+        rb_color = GREEN if rb_pct >= 80 else (YELLOW if rb_pct >= 40 else RED)
+        print(f"  review_by coverage: {rb_color}{len(with_review_by)}/{total_cp} ({rb_pct}%){RESET}")
+
+        if past_review_by:
+            has_critical = True
+            print(f"  {RED}✗  Past review_by date: {len(past_review_by)}{RESET}")
+            for cp in past_review_by:
+                print(f"    {DIM}[{cp['id']}] {cp.get('title', '')} — review_by {cp['review_by']}{RESET}")
+            recommendations.append(
+                f"{len(past_review_by)} checkpoint(s) are past their review_by date — "
+                "update the definitions and set a new review_by date."
+            )
+
+        if rb_pct < 40:
+            recommendations.append(
+                f"Only {rb_pct}% of checkpoints have review_by dates — add review_by fields "
+                "so definitions don't go stale silently."
+            )
+
+    print()
+
+    # ── Score Health ──────────────────────────────────────────────────────────
+    print(f"{BOLD}Score Health{RESET}")
+
+    if not baseline:
+        print(f"  {YELLOW}⚠ No baseline found.{RESET}")
+        recommendations.append(
+            "No committed baseline — run 'ready scan --baseline .readiness/review-baseline.json' "
+            "and commit the file to enable drift tracking and audit history."
+        )
+    else:
+        summary = baseline.get("summary", {})
+        pct = summary.get("readiness_pct", 0)
+        failing_red = summary.get("failing_red", 0)
+        failing_yellow = summary.get("failing_yellow", 0)
+        total = summary.get("total", 0)
+        passing = summary.get("passing", 0)
+        excepted_count = sum(1 for r in baseline.get("results", []) if r.get("status") == "exception")
+        scan_time = baseline.get("scan_time", "unknown")[:10]
+
+        pct_color = GREEN if pct >= 90 else (YELLOW if pct >= 70 else RED)
+        print(f"  Score: {pct_color}{BOLD}{pct:.0f}%{RESET}   (baseline from {scan_time})")
+
+        if failing_red:
+            has_critical = True
+            print(f"  {RED}Blocking failures: {failing_red}{RESET}")
+            recommendations.append(
+                f"{failing_red} blocking failure(s) in baseline — address these before going to review."
+            )
+        else:
+            print(f"  {GREEN}✓ No blocking failures{RESET}")
+
+        if failing_yellow:
+            print(f"  {YELLOW}Warnings: {failing_yellow}{RESET}")
+
+        if total > 0:
+            exc_rate = round(excepted_count / total * 100)
+            exc_color = GREEN if exc_rate <= 10 else (YELLOW if exc_rate <= 30 else RED)
+            print(f"  Exception rate: {exc_color}{excepted_count}/{total} ({exc_rate}% accepted as risk){RESET}")
+            passing_clean = passing - excepted_count if passing >= excepted_count else passing
+            print(f"  Genuinely passing: {passing_clean}/{total}")
+
+    print()
+
+    # ── Recommendations ───────────────────────────────────────────────────────
+    if recommendations:
+        print(f"{BOLD}Recommendations{RESET}")
+        for i, rec in enumerate(recommendations, 1):
+            print(f"  {CYAN}{i}.{RESET} {rec}")
+        print()
+    else:
+        print(f"{GREEN}✓ No issues found — readiness system looks healthy.{RESET}")
+        print()
+
+    return 1 if has_critical else 0
+
+
 def cmd_aggregate(args):
     """Aggregate baselines from multiple repos."""
     if not args.paths:
@@ -1421,17 +1680,28 @@ def cmd_aggregate(args):
         return 1
 
     # Build checkpoint-level heatmap
-    checkpoint_failures: dict[str, list[str]] = {}
+    services = [b.get("service_name", f"service-{i}") for i, b in enumerate(all_results)]
+    scores = {b.get("service_name", f"service-{i}"): b.get("summary", {}).get("readiness_pct", 0)
+              for i, b in enumerate(all_results)}
+
+    checkpoint_failures: dict[str, list[str]] = {}   # key -> [service, ...]
+    checkpoint_titles: dict[str, str] = {}
     for baseline in all_results:
-        service = baseline.get("service_name", "unknown")
+        svc = baseline.get("service_name", "unknown")
         for r in baseline.get("results", []):
             if r.get("status") in ("fail", "expired_exception"):
                 cp_id = r.get("checkpoint_id", "")
                 title = r.get("title", cp_id)
-                key = f"{cp_id}: {title}"
-                checkpoint_failures.setdefault(key, []).append(service)
+                key = cp_id
+                checkpoint_titles[key] = title
+                checkpoint_failures.setdefault(key, []).append(svc)
 
     total_services = len(all_results)
+
+    if getattr(args, "html", False):
+        return _aggregate_html(args, all_results, services, scores,
+                               checkpoint_failures, checkpoint_titles, total_services)
+
     print(f"\n{BOLD}Cross-Repo Readiness Heatmap{RESET}")
     print(f"{DIM}{total_services} services analyzed{RESET}\n")
 
@@ -1444,16 +1714,187 @@ def cmd_aggregate(args):
         checkpoint_failures.items(), key=lambda x: len(x[1]), reverse=True
     )
 
-    for checkpoint, services in sorted_gaps:
-        count = len(services)
+    for cp_id, failing_services in sorted_gaps:
+        title = checkpoint_titles.get(cp_id, cp_id)
+        count = len(failing_services)
         pct = round(count / total_services * 100)
         bar = "█" * count + "░" * (total_services - count)
         color = RED if pct > 50 else YELLOW
-        print(f"  {color}{bar}{RESET} {count}/{total_services} ({pct}%) — {checkpoint}")
+        print(f"  {color}{bar}{RESET} {count}/{total_services} ({pct}%) — {cp_id}: {title}")
         if args.verbose:
-            for svc in services:
+            for svc in failing_services:
                 print(f"    {DIM}↳ {svc}{RESET}")
 
+    print()
+    return 0
+
+
+def _aggregate_html(args, all_results, services, scores,
+                    checkpoint_failures, checkpoint_titles, total_services) -> int:
+    """Generate a self-contained HTML heatmap report."""
+    output_file = getattr(args, "html_output", None) or "readiness-heatmap.html"
+
+    # Sort checkpoints by most widespread failures
+    sorted_checkpoints = sorted(
+        checkpoint_failures.items(), key=lambda x: len(x[1]), reverse=True
+    )
+
+    # Build table data: for each checkpoint × service, was it a failure?
+    def _cell_status(cp_id: str, svc: str) -> str:
+        for baseline in all_results:
+            if baseline.get("service_name") == svc:
+                for r in baseline.get("results", []):
+                    if r.get("checkpoint_id") == cp_id:
+                        return r.get("status", "pass")
+        return "pass"
+
+    # Precompute all cell statuses
+    cells: dict[tuple[str, str], str] = {}
+    for baseline in all_results:
+        svc = baseline.get("service_name", "unknown")
+        for r in baseline.get("results", []):
+            cp_id = r.get("checkpoint_id", "")
+            cells[(cp_id, svc)] = r.get("status", "pass")
+
+    def _svc_dot(pct: float) -> str:
+        color = "#22c55e" if pct >= 90 else ("#f59e0b" if pct >= 70 else "#ef4444")
+        return f'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{color};margin-right:4px;vertical-align:middle"></span>'
+
+    # Build table rows
+    rows_html = ""
+    for cp_id, failing_svcs in sorted_checkpoints:
+        title = checkpoint_titles.get(cp_id, cp_id)
+        count = len(failing_svcs)
+        pct_fail = round(count / total_services * 100)
+        bar_color = "#ef4444" if pct_fail > 50 else "#f59e0b"
+        bar_width = pct_fail
+
+        cells_html = ""
+        for svc in services:
+            status = cells.get((cp_id, svc), "pass")
+            if status in ("fail", "expired_exception"):
+                cell_bg = "#fef2f2"
+                cell_icon = '<span style="color:#ef4444;font-weight:bold">✗</span>'
+            elif status == "exception":
+                cell_bg = "#fffbeb"
+                cell_icon = '<span style="color:#f59e0b">~</span>'
+            elif status == "pass":
+                cell_bg = "#f0fdf4"
+                cell_icon = '<span style="color:#22c55e">✓</span>'
+            else:
+                cell_bg = "#f8fafc"
+                cell_icon = '<span style="color:#94a3b8">—</span>'
+            cells_html += f'<td style="background:{cell_bg};text-align:center;padding:6px 4px">{cell_icon}</td>'
+
+        rows_html += f"""
+        <tr>
+          <td style="padding:6px 10px;white-space:nowrap">
+            <span style="color:#64748b;font-size:11px">[{cp_id}]</span>
+            <span style="margin-left:4px">{title}</span>
+          </td>
+          <td style="padding:6px 10px;text-align:center;font-size:12px;color:#64748b">{count}/{total_services}</td>
+          <td style="padding:6px 10px;min-width:80px">
+            <div style="background:#e2e8f0;border-radius:3px;height:8px;overflow:hidden">
+              <div style="background:{bar_color};height:8px;width:{bar_width}%"></div>
+            </div>
+          </td>
+          {cells_html}
+        </tr>"""
+
+    # Service header cells
+    svc_headers = "".join(
+        f'<th style="padding:8px 4px;text-align:center;font-size:12px;font-weight:500;'
+        f'white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis" title="{svc}">'
+        f'{_svc_dot(scores.get(svc, 0))}{svc[:14]}</th>'
+        for svc in services
+    )
+
+    scan_date = datetime.date.today().isoformat()
+    avg_score = round(sum(scores.values()) / len(scores)) if scores else 0
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Readiness Heatmap — {scan_date}</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          background: #f8fafc; color: #1e293b; padding: 32px 24px; }}
+  h1 {{ font-size: 20px; font-weight: 600; margin-bottom: 4px; }}
+  .meta {{ color: #64748b; font-size: 13px; margin-bottom: 24px; }}
+  .summary-cards {{ display: flex; gap: 16px; margin-bottom: 28px; flex-wrap: wrap; }}
+  .card {{ background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+           padding: 16px 20px; min-width: 140px; }}
+  .card-label {{ font-size: 11px; color: #64748b; text-transform: uppercase;
+                 letter-spacing: .05em; margin-bottom: 4px; }}
+  .card-value {{ font-size: 28px; font-weight: 700; }}
+  table {{ width: 100%; border-collapse: collapse; background: #fff;
+           border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;
+           box-shadow: 0 1px 3px rgba(0,0,0,.06); font-size: 13px; }}
+  thead th {{ background: #f1f5f9; padding: 10px 8px; text-align: left;
+              font-weight: 600; border-bottom: 1px solid #e2e8f0; }}
+  tbody tr:hover {{ background: #f8fafc; }}
+  tbody tr {{ border-bottom: 1px solid #f1f5f9; }}
+  .legend {{ display: flex; gap: 16px; margin-top: 16px; font-size: 12px;
+             color: #64748b; }}
+  .legend-item {{ display: flex; align-items: center; gap: 5px; }}
+</style>
+</head>
+<body>
+<h1>Cross-Repo Readiness Heatmap</h1>
+<p class="meta">Generated {scan_date} &nbsp;·&nbsp; {total_services} services &nbsp;·&nbsp; {len(sorted_checkpoints)} gaps</p>
+
+<div class="summary-cards">
+  <div class="card">
+    <div class="card-label">Services</div>
+    <div class="card-value">{total_services}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Avg Score</div>
+    <div class="card-value" style="color:{'#22c55e' if avg_score >= 90 else ('#f59e0b' if avg_score >= 70 else '#ef4444')}">{avg_score}%</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Systemic Gaps</div>
+    <div class="card-value" style="color:{'#ef4444' if sorted_checkpoints else '#22c55e'}">{len(sorted_checkpoints)}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Most Widespread</div>
+    <div class="card-value" style="font-size:16px;padding-top:6px">
+      {'—' if not sorted_checkpoints else f'{round(len(sorted_checkpoints[0][1])/total_services*100)}% of services'}
+    </div>
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width:280px">Checkpoint</th>
+      <th style="width:70px;text-align:center">Affected</th>
+      <th style="width:90px">Spread</th>
+      {svc_headers}
+    </tr>
+  </thead>
+  <tbody>
+    {rows_html if rows_html else '<tr><td colspan="100" style="text-align:center;padding:24px;color:#22c55e">No systemic gaps found</td></tr>'}
+  </tbody>
+</table>
+
+<div class="legend">
+  <div class="legend-item"><span style="color:#ef4444;font-weight:bold">✗</span> Failing</div>
+  <div class="legend-item"><span style="color:#f59e0b">~</span> Accepted risk</div>
+  <div class="legend-item"><span style="color:#22c55e">✓</span> Passing</div>
+  <div class="legend-item"><span style="color:#94a3b8">—</span> Skipped / N/A</div>
+</div>
+</body>
+</html>"""
+
+    with open(output_file, "w") as f:
+        f.write(html)
+
+    print(f"\n{GREEN}✓ HTML heatmap written to {output_file}{RESET}")
+    print(f"  {DIM}{total_services} services · {len(sorted_checkpoints)} systemic gaps · avg score {avg_score}%{RESET}")
     print()
     return 0
 
@@ -1539,10 +1980,27 @@ def main():
     items_parser.add_argument("--adapter", type=str, default="github", help="Adapter: github, ado, jira")
     items_parser.add_argument("--yes", "-y", action="store_true", help="Auto-approve all prompts")
 
+    # audit
+    subparsers.add_parser("audit", help="Audit exception health, definition staleness, and score health")
+
     # aggregate
     agg_parser = subparsers.add_parser("aggregate", help="Cross-repo heatmap")
     agg_parser.add_argument("paths", nargs="*", help="Paths to baseline files")
     agg_parser.add_argument("--verbose", "-v", action="store_true")
+    agg_parser.add_argument(
+        "--html",
+        dest="html",
+        action="store_true",
+        help="Generate self-contained HTML heatmap report",
+    )
+    agg_parser.add_argument(
+        "--html-output",
+        dest="html_output",
+        type=str,
+        default="readiness-heatmap.html",
+        metavar="FILE",
+        help="Output file for HTML report (default: readiness-heatmap.html)",
+    )
 
     args = parser.parse_args()
 
@@ -1562,6 +2020,8 @@ def main():
         sys.exit(cmd_history(args))
     elif args.command == "items":
         sys.exit(cmd_items(args))
+    elif args.command == "audit":
+        sys.exit(cmd_audit(args))
     elif args.command == "aggregate":
         sys.exit(cmd_aggregate(args))
     else:

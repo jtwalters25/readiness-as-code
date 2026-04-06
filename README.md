@@ -208,6 +208,7 @@ ready author --from FILE               # Generate AI prompt from a guideline doc
 ready badge                            # Generate README badge from current score
 ready decisions                        # Show all active, expiring, and expired exceptions
 ready history [BASELINES...]           # Show readiness trend from baseline snapshots
+ready audit                            # Audit exception health, definition staleness, and score health
 
 # Work items
 ready items --create                   # Propose + create work items (human approves each)
@@ -215,6 +216,7 @@ ready items --verify                   # Cross-check work items vs code
 
 # Cross-repo
 ready aggregate PATHS...               # Cross-repo heatmap from multiple baselines
+ready aggregate PATHS... --html        # Generate self-contained HTML heatmap report
 ```
 
 ## AI Integration

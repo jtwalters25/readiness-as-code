@@ -83,6 +83,11 @@
           "type": "string",
           "format": "uri",
           "description": "URL to relevant documentation or guideline section"
+        },
+        "review_by": {
+          "type": "string",
+          "format": "date",
+          "description": "ISO date (YYYY-MM-DD) by which this checkpoint definition should be reviewed. Flagged by 'ready audit' and 'ready scan --verbose' when overdue."
         }
       }
     },
