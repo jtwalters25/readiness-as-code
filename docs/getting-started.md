@@ -10,7 +10,7 @@ This guide walks you from zero to continuous readiness scanning in under 15 minu
 ## Step 1: Install and scan (30 seconds)
 
 ```bash
-pip install ready
+pip install readiness-as-code
 
 cd your-repo
 ready scan
@@ -145,7 +145,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
-      - run: pip install ready
+      - run: pip install readiness-as-code
       - run: ready scan
 ```
 
@@ -153,7 +153,7 @@ jobs:
 
 ```yaml
 - script: |
-    pip install ready
+    pip install readiness-as-code
     ready scan
   displayName: 'Readiness scan'
 ```
@@ -163,7 +163,7 @@ jobs:
 ```yaml
 readiness:
   script:
-    - pip install ready
+    - pip install readiness-as-code
     - ready scan
 ```
 

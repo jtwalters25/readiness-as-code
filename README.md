@@ -63,7 +63,7 @@ It replaces **prep work**, not judgment.
 ## Quickstart
 
 ```bash
-pip install ready
+pip install readiness-as-code
 
 cd your-repo
 ready scan
@@ -236,7 +236,7 @@ ready aggregate PATHS... --html        # Generate self-contained HTML heatmap re
 ready ships a [Model Context Protocol](https://modelcontextprotocol.io) server so any AI assistant can run scans, inspect checkpoints, and aggregate results — no CLI required.
 
 ```bash
-pip install "ready[mcp]"
+pip install "readiness-as-code[mcp]"
 ready-mcp    # starts the MCP server on stdio
 ```
 

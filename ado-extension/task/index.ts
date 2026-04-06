@@ -55,7 +55,7 @@ async function run(): Promise<void> {
       return;
     }
 
-    const installResult = tl.execSync(pip, ["install", "--quiet", "ready"]);
+    const installResult = tl.execSync(pip, ["install", "--quiet", "readiness-as-code"]);
     if (installResult.code !== 0) {
       tl.setResult(tl.TaskResult.Failed, `pip install ready failed: ${installResult.stderr}`);
       return;

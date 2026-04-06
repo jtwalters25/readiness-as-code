@@ -12,7 +12,7 @@ The ready MCP server exposes four tools any MCP-compatible AI can call:
 ## Install
 
 ```bash
-pip install "ready[mcp]"
+pip install "readiness-as-code[mcp]"
 ```
 
 Or from source:
