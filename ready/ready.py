@@ -579,6 +579,23 @@ def cmd_scan(args):
             print(f"\n{DIM}Run 'ready doctor' for a full setup check.{RESET}")
             return 1
 
+    import threading, itertools, time as _time
+
+    _done = threading.Event()
+
+    def _spinner():
+        frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        for f in itertools.cycle(frames):
+            if _done.is_set():
+                break
+            print(f"\r{DIM}{f} Scanning...{RESET}", end="", flush=True)
+            _time.sleep(0.08)
+        print("\r" + " " * 20 + "\r", end="", flush=True)
+
+    spin_thread = threading.Thread(target=_spinner, daemon=True)
+    if not getattr(args, "json", False):
+        spin_thread.start()
+
     try:
         result = run_scan(
             repo_root=repo_root,
@@ -589,14 +606,20 @@ def cmd_scan(args):
             service_name=service_name,
         )
     except json.JSONDecodeError as e:
+        _done.set()
         print(f"{RED}✗ JSON parse error in a .readiness/ file:{RESET}")
         print(f"  {e}")
         print(f"\n{DIM}Run 'ready doctor' to identify which file has the problem.{RESET}")
         return 1
     except Exception as e:
+        _done.set()
         print(f"{RED}✗ Scan failed unexpectedly:{RESET} {e}")
         print(f"\n{DIM}Run 'ready doctor' to check your setup, or 'ready scan --verbose' for more detail.{RESET}")
         return 1
+    finally:
+        _done.set()
+        if spin_thread.is_alive():
+            spin_thread.join(timeout=0.5)
 
     # JSON output (early return — machine consumers get stable format)
     if args.json:
