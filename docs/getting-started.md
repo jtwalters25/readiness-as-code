@@ -16,6 +16,8 @@ cd your-repo
 ready scan
 ```
 
+> **Windows / PATH issues?** Use `python -m ready scan` — works anywhere Python is installed.
+
 No init. No config files. `ready scan` auto-detects your project type and runs immediately:
 
 ```
@@ -35,11 +37,14 @@ Run `ready scan --verbose` to see everything — warnings, passing checks, excep
 When you're ready to commit your configuration, initialize a `.readiness/` directory:
 
 ```bash
-ready init                              # Universal starter (default)
-ready init --pack web-api               # REST/HTTP API checks
-ready init --pack security-baseline     # Secrets, dependency hygiene, security policy
-ready init --pack telemetry # Logging, tracing, metrics, dashboards
-ready init --list-packs                 # Show all available packs
+ready init                                   # Universal starter (default)
+ready init --pack web-api                    # REST/HTTP API checks
+ready init --pack security-baseline          # Secrets, dependency hygiene, security policy
+ready init --pack telemetry                  # Logging, tracing, metrics, dashboards
+ready init --pack engineering-review         # Full engineering review (26 checks)
+ready init --pack operational-review         # Operational readiness (14 checks)
+ready init --pack governance                 # SDLC gates + attestations (15 checks)
+ready init --list-packs                      # Show all available packs
 ```
 
 This creates:
@@ -110,13 +115,23 @@ Run `ready decisions` at any time to see all active, expiring, and expired excep
 
 ## Step 4: Add custom checkpoints
 
-The built-in packs cover common patterns. To translate your own review guidelines into checkpoints:
+Two ways to add checkpoints tailored to your codebase:
+
+**Option A — Let ready analyze your stack:**
+
+```bash
+ready infer
+```
+
+`ready infer` reads your repo — frameworks, dependencies, auth patterns, ADRs, Docker config — and proposes checkpoints with rationale. You approve each one with `[y/n/e]` before anything is written.
+
+**Option B — Generate from a guideline document:**
 
 ```bash
 ready author --from docs/ops-review.md
 ```
 
-This writes an `author-prompt.md` file combining your guideline with checkpoint authoring instructions. Paste it into any AI:
+This writes an `author-prompt.md` combining your guideline with authoring instructions. Paste it into any AI:
 
 ```
 Claude:   "Read author-prompt.md and generate checkpoint definitions"

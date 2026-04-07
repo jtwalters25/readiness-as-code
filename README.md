@@ -69,6 +69,8 @@ cd your-repo
 ready scan
 ```
 
+> **Windows / PATH issues?** Use `python -m ready scan` — works anywhere Python is installed.
+
 ```
 ready? — your-service   80%   1 blocking · 2 warnings
 
@@ -137,19 +139,25 @@ Four JSON files and a scanner. That's it.
 Start with a curated pack, then customize:
 
 ```bash
-ready init                              # Universal starter (default)
-ready init --pack web-api               # REST/HTTP API checks
-ready init --pack security-baseline     # Secrets, dependency hygiene, security policy
-ready init --pack telemetry             # Logging, tracing, metrics, dashboards
-ready init --list-packs                 # Show all available packs
+ready init                                   # Universal starter (default)
+ready init --pack web-api                    # REST/HTTP API checks
+ready init --pack security-baseline          # Secrets, dependency hygiene, security policy
+ready init --pack telemetry                  # Logging, tracing, metrics, dashboards
+ready init --pack engineering-review         # Full engineering review (arch, security, testing, AI/RAI)
+ready init --pack operational-review         # Operational readiness (SLOs, on-call, data, capacity)
+ready init --pack governance                 # SDLC gates + external review attestations
+ready init --list-packs                      # Show all available packs
 ```
 
 | Pack | Checks | Best for |
 |------|--------|----------|
-| `starter` | 11 universal | Any repo |
-| `web-api` | 17 API-specific | REST/HTTP services |
-| `security-baseline` | 8 security | Any repo with sensitive data |
-| `telemetry` | 8 telemetry | Production services |
+| `starter` | 11 | Any repo |
+| `web-api` | 17 | REST/HTTP services |
+| `security-baseline` | 8 | Any repo with sensitive data |
+| `telemetry` | 8 | Production services |
+| `engineering-review` | 26 | Pre-launch engineering review |
+| `operational-review` | 14 | Pre-launch operational review |
+| `governance` | 15 | SDLC compliance + sign-off tracking |
 
 ## Key Capabilities
 
@@ -168,6 +176,8 @@ ready init --list-packs                 # Show all available packs
 **Expiring accepted risks.** Teams can acknowledge known gaps with justification and an expiry date. The scanner respects them — then re-flags when the expiry passes. Nothing stays accepted forever by accident.
 
 **Readiness audit.** `ready audit` reports the health of your readiness system itself — exception age distribution, definition staleness, review_by coverage, and score trend. Know when your discipline layer is drifting, not just your code.
+
+**Codebase-aware checkpoint inference.** `ready infer` analyzes your repo — stack, frameworks, dependencies, ADRs, auth patterns, Docker config — and proposes tailored checkpoints with rationale. You approve each one before anything is written.
 
 **AI-assisted checkpoint authoring.** `ready author --from guidelines.md` generates a ready-to-paste prompt combining your guideline document with authoring instructions. Paste it into any AI to generate checkpoint definitions. Works with Claude, ChatGPT, Copilot, Cursor, or any model.
 
@@ -211,7 +221,8 @@ ready init                             # Scaffold .readiness/ with starter pack
 ready init --pack web-api              # Scaffold with a specific pack
 ready init --list-packs                # List available packs
 
-# Authoring
+# Authoring & inference
+ready infer                            # Analyze codebase → propose tailored checkpoints (human approves each)
 ready author --from FILE               # Generate AI prompt from a guideline document
 
 # Audit trail
