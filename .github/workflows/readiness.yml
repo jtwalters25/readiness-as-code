@@ -31,7 +31,7 @@ jobs:
         run: pip install readiness-as-code
 
       - name: Run readiness scan
-        run: ready scan --verbose --baseline .readiness/review-baseline.json
+        run: python -m ready scan --verbose --baseline .readiness/review-baseline.json
 
       - name: Upload baseline artifact
         if: always()
