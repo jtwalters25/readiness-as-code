@@ -8,6 +8,36 @@
 
 This document explains the key design decisions in ready, what alternatives were considered, and why specific tradeoffs were made. It's written for engineers evaluating whether this system fits their organization, and for anyone interested in the thinking behind the design.
 
+## Data Flow
+
+```
+   Review Guidelines          checkpoint-definitions.json
+  ┌─────────────────┐        ┌─────────────────────────┐
+  │ "Health endpoint │  ───►  │ { "id": "ops-007",      │
+  │  required"       │        │   "method": "grep",     │
+  │ "Auth on all     │        │   "pattern": "health",  │
+  │  endpoints"      │        │   "severity": "red" }   │
+  └─────────────────┘        └───────────┬─────────────┘
+                                         │
+                              ┌──────────▼──────────┐
+                              │    ready scan        │
+                              │                      │
+                              │  Code checks ──────► grep, glob, file_exists
+                              │  External checks ──► human attestations
+                              │  Hybrid checks ────► both must pass
+                              │                      │
+                              │  Exceptions ────────► skip (if not expired)
+                              │  Confidence ────────► verified / likely / inconclusive
+                              └──────────┬──────────┘
+                                         │
+                    ┌────────────────────┬┴──────────────────┐
+                    ▼                    ▼                    ▼
+             Terminal Output      Work Item Tracking    Cross-Repo Heatmap
+             (single line +       (closed-loop:         (aggregate baselines
+              blocking items       regression &           across services →
+              + CI exit code)      staleness detection)   systemic patterns)
+```
+
 ## Core Architectural Decision: Files, Not Infrastructure
 
 The entire system is JSON definitions + a Python scanner + CI templates. No database, no server, no dashboard, no SaaS account.
