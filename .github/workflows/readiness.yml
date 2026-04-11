@@ -28,7 +28,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install ready
-        run: pip install ready
+        run: pip install readiness-as-code
 
       - name: Run readiness scan
         run: ready scan --verbose --baseline .readiness/review-baseline.json
