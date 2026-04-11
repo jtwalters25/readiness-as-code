@@ -4,7 +4,7 @@ import json
 import os
 import tempfile
 import pytest
-from src.validators import (
+from ready.validators import (
     run_scan,
     evaluate_checkpoint,
     Status,
@@ -416,3 +416,186 @@ class TestTagFiltering:
         # gen-001 (README) has no applicable_tags — should never be skipped
         gen_001 = [r for r in result.results if r.checkpoint_id == "gen-001"][0]
         assert gen_001.status != Status.SKIP
+
+
+class TestHybridCheckpoints:
+    """Hybrid checkpoints require both code and external parts to pass."""
+
+    def _make_hybrid_cp(self, confidence: str = "verified") -> dict:
+        return {
+            "id": "hyb-001",
+            "title": "Observability SDK and backend",
+            "severity": "red",
+            "type": "hybrid",
+            "verification": {
+                "method": "hybrid",
+                "code_verification": {
+                    "method": "grep",
+                    "pattern": "opentelemetry",
+                    "target": "**/*.py",
+                    "min_matches": 1,
+                    "confidence": confidence,
+                },
+                "attestation_key": "observability_backend",
+            },
+        }
+
+    def _make_evidence(self, tmp_path, include_attestation: bool = True) -> dict:
+        if not include_attestation:
+            return {"version": "1.0", "attestations": []}
+        return {
+            "version": "1.0",
+            "attestations": [
+                {
+                    "checkpoint_id": "observability_backend",
+                    "attested_by": "jwalters",
+                    "attested_date": "2026-04-01",
+                    "evidence_link": "https://grafana.internal/d/my-service",
+                    "expires": "2027-04-01",
+                }
+            ],
+        }
+
+    def test_hybrid_passes_when_both_parts_pass(self, sample_repo):
+        """Hybrid checkpoint passes only when code AND external both pass."""
+        # Write a file that matches the observability grep
+        (sample_repo / "src" / "telemetry.py").write_text("import opentelemetry\n")
+        cp = self._make_hybrid_cp()
+        evidence = self._make_evidence(sample_repo)
+        result = evaluate_checkpoint(cp, str(sample_repo), evidence, {})
+        assert result.status == Status.PASS
+
+    def test_hybrid_fails_when_code_part_fails(self, sample_repo):
+        """Hybrid checkpoint fails when the code check fails (no matching file content)."""
+        # sample_repo has no opentelemetry import
+        cp = self._make_hybrid_cp()
+        evidence = self._make_evidence(sample_repo)
+        result = evaluate_checkpoint(cp, str(sample_repo), evidence, {})
+        assert result.status == Status.FAIL
+
+    def test_hybrid_fails_when_external_part_fails(self, sample_repo):
+        """Hybrid checkpoint fails when the external attestation is missing."""
+        (sample_repo / "src" / "telemetry.py").write_text("import opentelemetry\n")
+        cp = self._make_hybrid_cp()
+        evidence = self._make_evidence(sample_repo, include_attestation=False)
+        result = evaluate_checkpoint(cp, str(sample_repo), evidence, {})
+        assert result.status == Status.FAIL
+
+    def test_hybrid_inherits_confidence_from_code_verification(self, sample_repo):
+        """Confidence from code_verification.confidence must propagate to the result.
+
+        This is the nested-structure recursion bug: when code_verification has
+        'confidence': 'likely' but the outer verification dict does not, the scanner
+        must read from the nested block — not default to 'verified'.
+        """
+        # No opentelemetry import → code check fails
+        cp = self._make_hybrid_cp(confidence="likely")
+        evidence = self._make_evidence(sample_repo)
+        result = evaluate_checkpoint(cp, str(sample_repo), evidence, {})
+        assert result.status == Status.FAIL
+        # With confidence="likely", the message should say pattern-based, not "Failing"
+        assert "pattern-based" in result.message or result.confidence.value == "likely"
+
+    def test_hybrid_evidence_prefixed_correctly(self, sample_repo):
+        """Evidence items must be prefixed with [code] or [external]."""
+        (sample_repo / "src" / "telemetry.py").write_text("import opentelemetry\n")
+        cp = self._make_hybrid_cp()
+        evidence = self._make_evidence(sample_repo)
+        result = evaluate_checkpoint(cp, str(sample_repo), evidence, {})
+        assert result.status == Status.PASS
+        code_evidence = [e for e in result.evidence if e.startswith("[code]")]
+        ext_evidence = [e for e in result.evidence if e.startswith("[external]")]
+        assert len(code_evidence) > 0
+        assert len(ext_evidence) > 0
+
+    def test_hybrid_missing_code_verification_returns_clear_error(self, sample_repo):
+        """A hybrid checkpoint with no code_verification block should fail with a clear message."""
+        cp = {
+            "id": "hyb-bad",
+            "title": "Misconfigured hybrid",
+            "severity": "red",
+            "type": "hybrid",
+            "verification": {
+                "method": "hybrid",
+                "attestation_key": "observability_backend",
+                # code_verification block is intentionally missing
+            },
+        }
+        evidence = self._make_evidence(sample_repo)
+        result = evaluate_checkpoint(cp, str(sample_repo), evidence, {})
+        assert result.status == Status.FAIL
+        assert any("code verification method" in e.lower() for e in result.evidence)
+
+
+class TestEvidencePaths:
+    """evidence_paths field accepts string or array; arrays avoid manual brace syntax."""
+
+    def test_evidence_paths_string_behaves_like_target(self, sample_repo):
+        """evidence_paths as a string is equivalent to target."""
+        cp = {
+            "id": "ep-001",
+            "title": "Health endpoint (evidence_paths string)",
+            "severity": "red",
+            "type": "code",
+            "verification": {
+                "method": "grep",
+                "pattern": "health",
+                "evidence_paths": "**/*.py",
+                "min_matches": 1,
+            },
+        }
+        result = evaluate_checkpoint(cp, str(sample_repo), {}, {})
+        assert result.status == Status.PASS
+
+    def test_evidence_paths_array_finds_match_in_first_path(self, sample_repo):
+        """evidence_paths array scans each path; match in any one → pass."""
+        cp = {
+            "id": "ep-002",
+            "title": "Health endpoint (evidence_paths array)",
+            "severity": "red",
+            "type": "code",
+            "verification": {
+                "method": "grep",
+                "pattern": "health",
+                "evidence_paths": ["src/**/*.py", "lib/**/*.py"],
+                "min_matches": 1,
+            },
+        }
+        result = evaluate_checkpoint(cp, str(sample_repo), {}, {})
+        assert result.status == Status.PASS
+
+    def test_evidence_paths_array_no_match_fails(self, sample_repo):
+        """evidence_paths array fails when pattern is not found in any path."""
+        cp = {
+            "id": "ep-003",
+            "title": "Missing pattern",
+            "severity": "red",
+            "type": "code",
+            "verification": {
+                "method": "grep",
+                "pattern": "xyzzy_not_present_anywhere",
+                "evidence_paths": ["src/**/*.py", "tests/**/*.py"],
+                "min_matches": 1,
+            },
+        }
+        result = evaluate_checkpoint(cp, str(sample_repo), {}, {})
+        assert result.status == Status.FAIL
+
+    def test_evidence_paths_takes_precedence_over_target(self, sample_repo):
+        """When both evidence_paths and target are set, evidence_paths wins."""
+        # target points to a non-existent dir; evidence_paths points to src/
+        cp = {
+            "id": "ep-004",
+            "title": "Precedence check",
+            "severity": "red",
+            "type": "code",
+            "verification": {
+                "method": "grep",
+                "pattern": "health",
+                "evidence_paths": "src/**/*.py",
+                "target": "nonexistent_dir/**/*.py",
+                "min_matches": 1,
+            },
+        }
+        result = evaluate_checkpoint(cp, str(sample_repo), {}, {})
+        assert result.status == Status.PASS

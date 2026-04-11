@@ -19,6 +19,9 @@ Usage:
     ready items --create           Propose + create work items
     ready items --verify           Cross-check work items vs code
     ready audit                    Audit exception health, definition staleness, and score health
+    ready infer                    Propose tailored checkpoints (AI-powered if ANTHROPIC_API_KEY set)
+    ready infer --count N          Request N AI proposals (default: 8)
+    ready infer --no-ai            Force pattern-based mode even if API key is set
     ready aggregate PATHS...       Cross-repo heatmap (CLI)
     ready aggregate PATHS... --html  Generate self-contained HTML heatmap report
 """
@@ -74,6 +77,10 @@ PACKS = {
     "governance": (
         "governance",
         "Governance — 15 checks covering service classification, SDLC gates, and external review attestations",
+    ),
+    "service-migration": (
+        "service-migration",
+        "Service identity migration, auth provisioning, cutover",
     ),
 }
 
@@ -324,6 +331,27 @@ def _validate_definitions(path: str) -> list[str]:
                     errors.append(f"{loc} method 'json_path' requires a 'target' field")
                 if not verification.get("json_path"):
                     errors.append(f"{loc} method 'json_path' requires a 'json_path' field")
+            # evidence_paths must be a string or a list of strings
+            ep = verification.get("evidence_paths")
+            if ep is not None:
+                if isinstance(ep, list):
+                    if not all(isinstance(p, str) for p in ep):
+                        errors.append(f"{loc} 'evidence_paths' array must contain only strings")
+                elif not isinstance(ep, str):
+                    errors.append(f"{loc} 'evidence_paths' must be a string or array of strings")
+            # hybrid checkpoints must have a code_verification block
+            if method == "hybrid":
+                code_ver = verification.get("code_verification", {})
+                code_method = code_ver.get("method", "")
+                if not code_method:
+                    errors.append(
+                        f"{loc} hybrid verification requires a 'code_verification' block with a 'method' field"
+                    )
+                elif code_method not in VALID_METHODS or code_method in ("hybrid", "external_attestation", "human_attestation"):
+                    errors.append(
+                        f"{loc} code_verification method '{code_method}' is not valid for hybrid checks — "
+                        f"use: grep, glob, glob_all, grep_all, file_exists, file_count, grep_count, json_path"
+                    )
 
     return errors
 
@@ -2259,11 +2287,110 @@ def _build_checkpoint_proposals(profile: dict) -> list[dict]:
     return proposals
 
 
+def _call_ai_for_suggestions(profile: dict, existing_checkpoints: list, count: int = 8) -> list:
+    """Call Claude to generate tailored checkpoint proposals from a stack profile."""
+    try:
+        import anthropic
+    except ImportError:
+        raise ImportError(
+            'anthropic package not installed. Run: pip install "readiness-as-code[ai]"'
+        )
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise ValueError("ANTHROPIC_API_KEY environment variable is not set.")
+
+    existing_summary = "\n".join(
+        f"  - [{cp.get('id', '?')}] {cp.get('title', '')}"
+        for cp in existing_checkpoints
+    ) or "  (none yet)"
+
+    deps_preview = ", ".join(profile["dependencies"][:30]) or "none"
+
+    prompt = f"""You are a senior platform engineer helping a team add readiness checkpoints to their codebase.
+
+## Codebase Profile
+
+- Language: {profile["language"]}
+- Frameworks: {", ".join(profile["frameworks"]) if profile["frameworks"] else "none detected"}
+- Key dependencies: {deps_preview}
+- Docker config present: {profile["has_docker"]}
+- Kubernetes / deployment config: {profile["has_k8s"]}
+- Auth library detected: {profile["has_auth"]}
+- API routes detected: {profile["has_routes"]}
+- Database migrations detected: {profile["has_migrations"]}
+- ADRs / decision docs: {profile["has_adr"]}
+
+## Existing Checkpoints — do NOT duplicate these
+
+{existing_summary}
+
+## Your Task
+
+Propose exactly {count} new readiness checkpoints tailored to this specific stack that are not already covered above.
+
+Focus on gaps experienced engineers would catch for this combination of language, frameworks, and infrastructure — framework-specific security pitfalls, operational readiness for the detected infra, dependency hygiene for this language, auth/API patterns. Avoid generic advice that would apply to any repo.
+
+Each checkpoint must follow this exact JSON schema. Return ONLY a raw JSON array with no markdown, no explanation, no code fences:
+
+[
+  {{
+    "id": "suggest-XXX-NNN",
+    "title": "...",
+    "description": "1-2 sentences: what this checks and why it matters for this stack.",
+    "severity": "red",
+    "type": "code",
+    "verification": {{
+      "method": "grep",
+      "pattern": "regex_pattern_here",
+      "target": "**/*.py",
+      "min_matches": 1
+    }},
+    "fix_hint": "Concrete 1-2 sentence action to fix this.",
+    "_rationale": "Why this is relevant to this specific stack — shown during review, not written to file."
+  }}
+]
+
+Rules:
+- severity "red" = blocks shipping. "yellow" = important but not blocking.
+- method "grep": pattern is a regex, target is a file glob, min_matches 0 means pattern must NOT appear, 1 means it must.
+- method "glob": pattern is a brace-expanded glob (e.g. "{{Dockerfile,docker-compose.yml}}"), no target field, min_matches 1.
+- method "file_exists": pattern is a single file path, no target, no min_matches.
+- Keep IDs as suggest-XXX-NNN where XXX is a short topic tag (e.g. suggest-sec-001, suggest-docker-002).
+- Include _rationale on every proposal — this is the most important field for the human reviewer.
+"""
+
+    client = anthropic.Anthropic(api_key=api_key)
+    response = client.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=4096,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    raw = response.content[0].text.strip()
+
+    # Strip markdown fences if the model included them despite instructions
+    if raw.startswith("```"):
+        raw = re.sub(r"^```[a-z]*\n?", "", raw)
+        raw = re.sub(r"\n?```$", "", raw.strip())
+        raw = raw.strip()
+
+    proposals = json.loads(raw)
+    if not isinstance(proposals, list):
+        raise ValueError("AI response was not a JSON array — cannot parse proposals.")
+
+    return proposals
+
+
 def cmd_infer(args):
     """
     Analyze the codebase to infer tailored checkpoint proposals,
     then present each one for human approval before writing to
     checkpoint-definitions.json.
+
+    If ANTHROPIC_API_KEY is set, Claude generates the proposals from
+    the detected stack profile. Otherwise falls back to built-in
+    pattern-based proposals.
     """
     repo_root = find_repo_root()
     readiness_dir = os.path.join(repo_root, READINESS_DIR)
@@ -2295,22 +2422,48 @@ def cmd_infer(args):
     print(f"  Routes/API:  {CYAN}{'detected' if profile['has_routes'] else 'not detected'}{RESET}")
     print(f"  Migrations:  {CYAN}{'detected' if profile['has_migrations'] else 'not detected'}{RESET}")
 
-    proposals = _build_checkpoint_proposals(profile)
+    # Load existing definitions before building proposals (needed for both paths)
+    with open(definitions_path) as f:
+        existing = json.load(f)
+    existing_checkpoints = existing.get("checkpoints", [])
+    existing_ids = {cp.get("id") for cp in existing_checkpoints}
+
+    # ── AI path ───────────────────────────────────────────────────────────────
+    ai_mode = bool(os.environ.get("ANTHROPIC_API_KEY")) and not getattr(args, "no_ai", False)
+
+    if ai_mode:
+        count = getattr(args, "count", 8) or 8
+        print(f"\n{CYAN}Calling Claude to generate tailored proposals...{RESET}", flush=True)
+        try:
+            proposals = _call_ai_for_suggestions(profile, existing_checkpoints, count=count)
+            # Filter any IDs that collide with existing
+            proposals = [p for p in proposals if p.get("id") not in existing_ids]
+            source_label = "AI-generated"
+        except ImportError as e:
+            print(f"{YELLOW}⚠ {e}{RESET}")
+            print(f"{DIM}Falling back to built-in pattern-based proposals.{RESET}\n")
+            ai_mode = False
+        except ValueError as e:
+            print(f"{YELLOW}⚠ {e}{RESET}")
+            print(f"{DIM}Falling back to built-in pattern-based proposals.{RESET}\n")
+            ai_mode = False
+        except Exception as e:
+            print(f"{YELLOW}⚠ AI call failed: {e}{RESET}")
+            print(f"{DIM}Falling back to built-in pattern-based proposals.{RESET}\n")
+            ai_mode = False
+
+    # ── Pattern-based fallback ────────────────────────────────────────────────
+    if not ai_mode:
+        proposals = _build_checkpoint_proposals(profile)
+        proposals = [p for p in proposals if p.get("id") not in existing_ids]
+        source_label = "pattern-based"
+
     if not proposals:
         print(f"\n{GREEN}✓ No additional checkpoints to propose for this stack.{RESET}")
         return 0
 
-    # Load existing checkpoint IDs to avoid duplicates
-    with open(definitions_path) as f:
-        existing = json.load(f)
-    existing_ids = {cp.get("id") for cp in existing.get("checkpoints", [])}
-
-    proposals = [p for p in proposals if p["id"] not in existing_ids]
-    if not proposals:
-        print(f"\n{GREEN}✓ All inferred checkpoints already exist in your definitions.{RESET}")
-        return 0
-
-    print(f"\n{BOLD}{len(proposals)} checkpoint(s) proposed based on your stack{RESET}")
+    mode_note = f"{CYAN}AI-generated · Claude Opus{RESET}" if source_label == "AI-generated" else f"{DIM}pattern-based fallback{RESET}"
+    print(f"\n{BOLD}{len(proposals)} checkpoint(s) proposed{RESET}  ({mode_note})")
     print(f"{DIM}Review each one. [y] approve  [n] skip  [e] edit title before approving{RESET}\n")
 
     approved = []
@@ -2445,9 +2598,22 @@ def main():
     subparsers.add_parser("audit", help="Audit exception health, definition staleness, and score health")
 
     # infer
-    subparsers.add_parser(
+    infer_parser = subparsers.add_parser(
         "infer",
-        help="Analyze codebase and propose tailored checkpoints for human approval",
+        help="Analyze codebase and propose tailored checkpoints (AI-powered if ANTHROPIC_API_KEY is set)",
+    )
+    infer_parser.add_argument(
+        "--count",
+        type=int,
+        default=8,
+        metavar="N",
+        help="Number of AI proposals to request (default: 8, only applies in AI mode)",
+    )
+    infer_parser.add_argument(
+        "--no-ai",
+        dest="no_ai",
+        action="store_true",
+        help="Force pattern-based proposals even if ANTHROPIC_API_KEY is set",
     )
 
     # aggregate

@@ -36,17 +36,9 @@
 
 ## The Problem: Velocity Outran Discipline
 
-AI coding tools removed the friction from writing and shipping code. They did not remove the friction from the discipline work — health checks, secrets hygiene, on-call registration, telemetry coverage, auth on every endpoint. That work is still human, still manual, still slow.
+AI coding tools removed the friction from writing and shipping code. They did not remove the friction from the discipline work — health checks, secrets hygiene, on-call registration, telemetry coverage, auth on every endpoint. Velocity is now AI-speed. Discipline is still person-speed. The gap between the two is where incidents live.
 
-The result: **velocity is now AI-speed. Discipline is still person-speed.** The gap between the two is where incidents live.
-
-This isn't a competence problem. The Claude Code source exposure, the wave of data breaches at otherwise-strong engineering orgs, the production breakdowns on services that passed code review — these are discipline failures caused by velocity. Smart teams moved fast, skipped the prep work, and found out later that the scaffolding wasn't there.
-
-**Readiness as code** closes that gap. Review criteria are expressed as committed definitions. Every change is scanned against them. Exceptions are explicit and time-bound. The discipline layer runs at the same speed as the rest of the pipeline.
-
-`ready` is the tool that implements this practice.
-
-It replaces **prep work**, not judgment.
+Production breakdowns keep hitting strong engineering orgs — not because they lack talent, but because velocity outran the scaffolding. Smart teams moved fast, skipped the prep work, and found out later that the checks weren't there. `ready` is the tool that implements this practice. It replaces **prep work**, not judgment.
 
 ## Before / After
 
@@ -91,37 +83,11 @@ ready? — your-service   100%   ✓   ▲ +12%
 
 One line. The drift indicator appears automatically whenever a committed baseline exists.
 
+## Origin
+
+Built from production use managing 86+ readiness checkpoints across enterprise reliability engineering at scale. This is the vendor-neutral, portable version of a system that enforces production readiness across real services handling real incidents — not a weekend experiment.
+
 ## How It Works
-
-```
-   Review Guidelines          checkpoint-definitions.json
-  ┌─────────────────┐        ┌─────────────────────────┐
-  │ "Health endpoint │  ───►  │ { "id": "ops-007",      │
-  │  required"       │        │   "method": "grep",     │
-  │ "Auth on all     │        │   "pattern": "health",  │
-  │  endpoints"      │        │   "severity": "red" }   │
-  └─────────────────┘        └───────────┬─────────────┘
-                                         │
-                              ┌──────────▼──────────┐
-                              │    ready scan        │
-                              │                      │
-                              │  Code checks ──────► grep, glob, file_exists
-                              │  External checks ──► human attestations
-                              │  Hybrid checks ────► both must pass
-                              │                      │
-                              │  Exceptions ────────► skip (if not expired)
-                              │  Confidence ────────► verified / likely / inconclusive
-                              └──────────┬──────────┘
-                                         │
-                    ┌────────────────────┬┴──────────────────┐
-                    ▼                    ▼                    ▼
-             Terminal Output      Work Item Tracking    Cross-Repo Heatmap
-             (single line +       (closed-loop:         (aggregate baselines
-              blocking items       regression &           across services →
-              + CI exit code)      staleness detection)   systemic patterns)
-```
-
-## The Entire System
 
 ```
 your-repo/
@@ -132,7 +98,7 @@ your-repo/
     └── review-baseline.json          # Last scan snapshot (committed = audit trail)
 ```
 
-Four JSON files and a scanner. That's it.
+Four JSON files and a scanner. Checkpoints resolve through three verification types: **code checks** (grep/glob/file_exists against the repo), **external checks** (human attestations for artifacts outside the repo), and **hybrid checks** (both must pass). → [Architecture details](docs/architecture-and-tradeoffs.md) · [Verification types](docs/verification-types.md)
 
 ## Checkpoint Packs
 
@@ -146,6 +112,7 @@ ready init --pack telemetry                  # Logging, tracing, metrics, dashbo
 ready init --pack engineering-review         # Full engineering review (arch, security, testing, AI/RAI)
 ready init --pack operational-review         # Operational readiness (SLOs, on-call, data, capacity)
 ready init --pack governance                 # SDLC gates + external review attestations
+ready init --pack service-migration          # Service identity migration, auth provisioning, cutover
 ready init --list-packs                      # Show all available packs
 ```
 
@@ -158,44 +125,20 @@ ready init --list-packs                      # Show all available packs
 | `engineering-review` | 26 | Pre-launch engineering review |
 | `operational-review` | 14 | Pre-launch operational review |
 | `governance` | 15 | SDLC compliance + sign-off tracking |
+| `service-migration` | 9 | Service identity migration + cutover |
 
 ## Key Capabilities
 
-**Zero-config first run.** `ready scan` works immediately — no init, no config files. It auto-detects your project type and runs the most appropriate pack. Get your first score in under 15 seconds.
-
-**Score-first output.** Default output is a single line. Blocking items appear below it with fix hints. Everything else is collapsed — run `--verbose` when you want the full picture.
-
-**Auto-drift detection.** If a committed baseline exists, every scan shows a delta automatically: `▲ +12%` or `▼ -5%`. No flags, no extra commands.
-
-**Three verification types.** Code checks scan your repo automatically. External checks track human attestations for artifacts outside the repo (dashboards, registrations, sign-offs). Hybrid checks require both. → [Details](docs/verification-types.md)
-
-**Closed-loop work item tracking.** Gaps become tracked work items (GitHub Issues, Azure DevOps, Jira). If a ticket is closed but the code still fails → flagged as **regression**. If code is fixed but the ticket is still open → flagged as **stale**.
-
-**Cross-repo aggregation.** Run `ready aggregate` across multiple baselines. *"Telemetry gaps in 4 of 5 services"* — that's a platform problem, not a team problem. Generate an HTML heatmap report leadership can actually read.
-
-**Expiring accepted risks.** Teams can acknowledge known gaps with justification and an expiry date. The scanner respects them — then re-flags when the expiry passes. Nothing stays accepted forever by accident.
-
-**Readiness audit.** `ready audit` reports the health of your readiness system itself — exception age distribution, definition staleness, review_by coverage, and score trend. Know when your discipline layer is drifting, not just your code.
-
-**Codebase-aware checkpoint inference.** `ready infer` analyzes your repo — stack, frameworks, dependencies, ADRs, auth patterns, Docker config — and proposes tailored checkpoints with rationale. You approve each one before anything is written.
-
-**AI-assisted checkpoint authoring.** `ready author --from guidelines.md` generates a ready-to-paste prompt combining your guideline document with authoring instructions. Paste it into any AI to generate checkpoint definitions. Works with Claude, ChatGPT, Copilot, Cursor, or any model.
-
-**README badge.** `ready badge` generates a shields.io badge reflecting your committed readiness score. Paste it into your README.
-
-**CI gating on every PR.** The scanner exits non-zero on red failures. Drop the included template into GitHub Actions, Azure Pipelines, or GitLab CI. → [Details](docs/ci-integration.md)
-
-**Azure DevOps Marketplace extension.** First-class ADO integration: a pipeline task that runs `ready scan` and publishes every checkpoint as a test case in the Tests tab, plus a dashboard widget showing your score, trend sparkline, and blocking failure count across builds. → [Details](ado-extension/README.md)
-
-## Who This Is For
-
-**Teams using AI coding tools** — Copilot, Cursor, Claude Code, and their successors are accelerating how fast code gets written and shipped. `ready` is the enforcement layer that makes sure discipline scales at the same rate. The faster your team moves, the more you need it.
-
-**Engineering teams** — Stop spending hours on review prep. Know your compliance posture at any time, on any branch, before anyone asks.
-
-**Reviewers** — Arrive at reviews with a pre-populated, evidence-backed assessment. Spend the meeting on judgment calls, not discovery work the scanner already did.
-
-**Engineering leadership** — Compliance posture across all services in one view. Auditable trail of every decision. An HTML heatmap showing systemic gaps — not anecdotes, not vibes.
+- **Auto-drift detection.** If a committed baseline exists, every scan shows a delta: `▲ +12%` or `▼ -5%`. No flags, no extra commands.
+- **Closed-loop work item tracking.** Gaps become tracked work items (GitHub, Azure DevOps, Jira); ticket-closed-but-code-failing flags as **regression**, code-fixed-but-ticket-open as **stale**.
+- **Cross-repo aggregation.** `ready aggregate` turns multiple baselines into an HTML heatmap — *"telemetry gaps in 4 of 5 services"* is a platform problem, not a team problem.
+- **Expiring accepted risks.** Acknowledge a gap with a justification and expiry date; the scanner re-flags it when the expiry passes.
+- **Readiness audit.** `ready audit` reports the health of the readiness system itself — exception age, definition staleness, review_by coverage, score trend.
+- **Codebase-aware inference.** `ready infer` analyzes stack, frameworks, dependencies, ADRs, and auth patterns to propose tailored checkpoints you approve one at a time.
+- **AI-assisted authoring.** `ready author --from guidelines.md` generates a paste-ready prompt for any model (Claude, ChatGPT, Copilot, Cursor, Gemini).
+- **README badge.** `ready badge` generates a shields.io badge from the committed score.
+- **CI gating.** Non-zero exit on red failures; templates for GitHub Actions, Azure Pipelines, GitLab CI. → [Details](docs/ci-integration.md)
+- **Azure DevOps extension.** Pipeline task publishes each checkpoint as a test case, plus a dashboard widget for score, trend, and blocking count. → [Details](ado-extension/README.md)
 
 ## What This Is Not
 
@@ -242,16 +185,12 @@ ready aggregate PATHS... --html        # Generate self-contained HTML heatmap re
 
 ## AI Integration
 
-### MCP Server (Claude, Cursor, Copilot, any MCP client)
-
-ready ships a [Model Context Protocol](https://modelcontextprotocol.io) server so any AI assistant can run scans, inspect checkpoints, and aggregate results — no CLI required.
+ready ships a [Model Context Protocol](https://modelcontextprotocol.io) server (`ready-mcp`) so any MCP client — Claude, Cursor, Copilot — can run scans and inspect checkpoints directly.
 
 ```bash
 pip install "readiness-as-code[mcp]"
-ready-mcp    # starts the MCP server on stdio
+ready-mcp
 ```
-
-Configure your AI tool to launch `ready-mcp` and it gains four tools:
 
 | Tool | Description |
 |------|-------------|
@@ -260,23 +199,13 @@ Configure your AI tool to launch `ready-mcp` and it gains four tools:
 | `explain_checkpoint` | Deep-dive on a specific check |
 | `aggregate_baselines` | Cross-repo heatmap for systemic gap detection |
 
-**→ [Setup instructions for Claude Desktop, Cursor, VS Code, and more](mcp/README.md)**
-
-### AI Skills (prompt-based, any model)
-
-For deeper AI-assisted authoring, use `ready author` or the prompt skills in `ai-skills/`:
+For prompt-based authoring with any model:
 
 ```bash
-# Generate a checkpoint prompt from a guideline document
-ready author --from docs/ops-review.md
-
-# Then paste author-prompt.md into any AI:
-# Claude:   "Read author-prompt.md and generate checkpoint definitions"
-# Cursor:   @author-prompt.md
-# Copilot:  #file:author-prompt.md
+ready author --from docs/ops-review.md   # generates author-prompt.md, paste into any AI
 ```
 
-Works with Claude, ChatGPT, Copilot, Cursor, Gemini — any model that can read a file.
+**→ [MCP setup for Claude Desktop, Cursor, VS Code](mcp/README.md)**
 
 ## Design Principles
 

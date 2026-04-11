@@ -161,9 +161,32 @@ def _verify_glob(verification: dict, repo_root: str) -> tuple[bool, list[str]]:
     return len(matches) >= min_matches, [os.path.relpath(m, repo_root) for m in matches]
 
 
+def _resolve_evidence_paths(verification: dict, repo_root: str, default: str = "**/*") -> list[str]:
+    """Resolve file paths from evidence_paths (string or list) or target (string).
+
+    evidence_paths takes precedence over target. When evidence_paths is a list,
+    each element is resolved as a separate glob — users never need brace syntax.
+    """
+    evidence_paths = verification.get("evidence_paths")
+    if evidence_paths is not None:
+        if isinstance(evidence_paths, list):
+            result: list[str] = []
+            for ep in evidence_paths:
+                result.extend(_resolve_glob(str(ep), repo_root))
+            return result
+        return _resolve_glob(str(evidence_paths), repo_root)
+    target = verification.get("target", default)
+    return _resolve_glob(target, repo_root)
+
+
 def _grep_files(pattern: str, target: str, repo_root: str) -> list[str]:
     """Shared helper: grep a pattern across target files, return rel-path:line evidence."""
     target_files = _resolve_glob(target, repo_root)
+    return _grep_file_list(pattern, target_files, repo_root)
+
+
+def _grep_file_list(pattern: str, target_files: list[str], repo_root: str) -> list[str]:
+    """Grep a pattern across a pre-resolved list of files."""
     evidence = []
     for filepath in target_files:
         if not os.path.isfile(filepath):
@@ -180,11 +203,11 @@ def _grep_files(pattern: str, target: str, repo_root: str) -> list[str]:
 
 def _verify_grep(verification: dict, repo_root: str) -> tuple[bool, list[str]]:
     pattern = verification.get("pattern", "")
-    target = verification.get("target", "**/*")
     min_matches = verification.get("min_matches", 1)
     pass_condition = verification.get("pass_condition", "present")
 
-    evidence = _grep_files(pattern, target, repo_root)
+    target_files = _resolve_evidence_paths(verification, repo_root)
+    evidence = _grep_file_list(pattern, target_files, repo_root)
 
     # pass_condition: "absent" — pattern must NOT be found (negative check)
     if pass_condition == "absent":
@@ -200,11 +223,11 @@ def _verify_grep(verification: dict, repo_root: str) -> tuple[bool, list[str]]:
 def _verify_grep_all(verification: dict, repo_root: str) -> tuple[bool, list[str]]:
     """All patterns in `patterns` must be found — used for SDL gate checks."""
     patterns = verification.get("patterns", [])
-    target = verification.get("target", "**/*")
+    target_files = _resolve_evidence_paths(verification, repo_root)
     all_evidence = []
 
     for pattern in patterns:
-        hits = _grep_files(pattern, target, repo_root)
+        hits = _grep_file_list(pattern, target_files, repo_root)
         if not hits:
             return False, [f"Pattern not found: {pattern}"]
         all_evidence.extend(hits)
@@ -402,10 +425,19 @@ def evaluate_checkpoint(
         code_method = code_ver.get("method", "")
         code_verifier = VERIFICATION_METHODS.get(code_method)
 
+        # Inherit confidence from nested code_verification when the outer verification
+        # block does not specify its own confidence. Hybrid checkpoints typically carry
+        # confidence on the code check (e.g. "likely" for pattern-based greps), not on
+        # the outer wrapper — the scanner must recurse into the nested block to pick it up.
+        if "confidence" not in verification and "confidence" in code_ver:
+            confidence = Confidence(code_ver.get("confidence", "verified"))
+
         code_passed, code_evidence = (
             code_verifier(code_ver, repo_root)
             if code_verifier
-            else (False, ["Unknown code verification method"])
+            else (False, [f"Unknown code verification method: '{code_method or '(none)'}'. "
+                          "Hybrid checkpoints require a 'code_verification' block with a "
+                          "valid method (grep, glob, file_exists, etc.)."])
         )
         ext_passed, ext_evidence = _verify_external(verification, evidence_registry)
 

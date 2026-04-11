@@ -1,0 +1,148 @@
+{
+  "version": "1.0",
+  "pack": "service-migration",
+  "description": "Service identity migration — auth provisioning, CI/CD cutover, observability, and decommission",
+  "checkpoints": [
+    {
+      "id": "mig-001",
+      "title": "Identity provider app registrations created for all components",
+      "description": "All service components requiring authentication must have app registrations or service principals provisioned in the identity provider before cutover.",
+      "guideline": "Service Migration Readiness",
+      "guideline_section": "1.1 — Identity Provisioning",
+      "severity": "red",
+      "type": "external",
+      "verification": {
+        "method": "external_attestation",
+        "attestation_key": "idp_app_registrations"
+      },
+      "fix_hint": "Create app registrations for each component in your identity provider. Attest completion in .readiness/external-evidence.json with a link to the registration(s)."
+    },
+    {
+      "id": "mig-002",
+      "title": "API permissions granted with admin or owner consent",
+      "description": "All required API permissions for the new app registrations must be granted and consented to by an admin or owner before the service can authenticate.",
+      "guideline": "Service Migration Readiness",
+      "guideline_section": "1.2 — API Permissions",
+      "severity": "red",
+      "type": "external",
+      "verification": {
+        "method": "external_attestation",
+        "attestation_key": "api_permissions_consented"
+      },
+      "fix_hint": "Grant and consent to all required API permissions. Attest completion in .readiness/external-evidence.json with a link to the permission grant record."
+    },
+    {
+      "id": "mig-003",
+      "title": "Security groups or RBAC roles created for access tiers",
+      "description": "Security groups or RBAC roles must be created and populated for each access tier (read, write, admin) before user access can be migrated.",
+      "guideline": "Service Migration Readiness",
+      "guideline_section": "1.3 — Access Control",
+      "severity": "yellow",
+      "type": "external",
+      "verification": {
+        "method": "external_attestation",
+        "attestation_key": "rbac_roles_created"
+      },
+      "fix_hint": "Create security groups or RBAC roles for each access tier and populate membership. Attest in .readiness/external-evidence.json."
+    },
+    {
+      "id": "mig-004",
+      "title": "CI/CD service connections validated for target environments",
+      "description": "Pipeline service connections to target environments must exist and be validated before deploying. Missing connections cause silent deployment failures.",
+      "guideline": "Service Migration Readiness",
+      "guideline_section": "2.1 — CI/CD Readiness",
+      "severity": "red",
+      "type": "hybrid",
+      "verification": {
+        "method": "hybrid",
+        "code_verification": {
+          "method": "glob",
+          "pattern": "{azure-pipelines.yml,.azure/*.yml,.github/workflows/*.yml,Jenkinsfile,Makefile,.gitlab-ci.yml}",
+          "min_matches": 1,
+          "confidence": "likely"
+        },
+        "attestation_key": "cicd_service_connections"
+      },
+      "fix_hint": "Ensure a pipeline definition exists and service connections to all target environments have been tested. Attest validation in .readiness/external-evidence.json."
+    },
+    {
+      "id": "mig-005",
+      "title": "Application deployed to all target environments",
+      "description": "The application must be successfully deployed to all target environments (staging, production) and validated before traffic cutover.",
+      "guideline": "Service Migration Readiness",
+      "guideline_section": "2.2 — Deployment",
+      "severity": "red",
+      "type": "external",
+      "verification": {
+        "method": "external_attestation",
+        "attestation_key": "deployed_to_all_environments"
+      },
+      "fix_hint": "Deploy to all target environments and verify health. Attest in .readiness/external-evidence.json with links to deployment records."
+    },
+    {
+      "id": "mig-006",
+      "title": "Observability baseline established in new environment",
+      "description": "Logging and monitoring must be wired and emitting data in the new environment before cutover to ensure visibility during and after migration.",
+      "guideline": "Service Migration Readiness",
+      "guideline_section": "3.1 — Observability",
+      "severity": "yellow",
+      "type": "hybrid",
+      "verification": {
+        "method": "hybrid",
+        "code_verification": {
+          "method": "grep",
+          "pattern": "(logging|logger|log\\.info|log\\.warn|log\\.error|opentelemetry|applicationinsights|datadog|newrelic|prometheus|grafana|honeycomb)",
+          "target": "{src/**,app/**,lib/**,cmd/**,pkg/**,server/**}/*.{py,js,ts,go,cs,java}",
+          "min_matches": 1,
+          "confidence": "likely"
+        },
+        "attestation_key": "observability_baseline_established"
+      },
+      "fix_hint": "Verify logging and monitoring are wired and emitting data in the new environment. Attest in .readiness/external-evidence.json with a link to the dashboard or log view."
+    },
+    {
+      "id": "mig-007",
+      "title": "Compliance reviews initiated for security, privacy, and responsible AI",
+      "description": "Security, privacy, and responsible AI review processes must be initiated for the new service identity before production cutover.",
+      "guideline": "Service Migration Readiness",
+      "guideline_section": "4.1 — Compliance",
+      "severity": "red",
+      "type": "external",
+      "verification": {
+        "method": "external_attestation",
+        "attestation_key": "compliance_reviews_initiated"
+      },
+      "fix_hint": "Submit the service for security review, privacy review, and responsible AI review. Attest with ticket or review links in .readiness/external-evidence.json."
+    },
+    {
+      "id": "mig-008",
+      "title": "Functional validation and sign-off completed",
+      "description": "End-to-end functional validation must be completed in the target environment and signed off by the team before traffic is cut over.",
+      "guideline": "Service Migration Readiness",
+      "guideline_section": "4.2 — Validation",
+      "severity": "red",
+      "type": "external",
+      "verification": {
+        "method": "external_attestation",
+        "attestation_key": "functional_validation_signoff"
+      },
+      "fix_hint": "Run end-to-end tests in the target environment and get sign-off from the team. Attest in .readiness/external-evidence.json with a link to test results."
+    },
+    {
+      "id": "mig-009",
+      "title": "Decommission plan documented for previous service identity",
+      "description": "A decommission plan must exist describing how the previous service identity, app registrations, and access will be removed after successful cutover.",
+      "guideline": "Service Migration Readiness",
+      "guideline_section": "5.1 — Decommission",
+      "severity": "yellow",
+      "type": "code",
+      "verification": {
+        "method": "glob",
+        "pattern": "{docs/decommission*,docs/DECOMMISSION*,DECOMMISSION*,decommission*,.readiness/decommission*}",
+        "min_matches": 1,
+        "confidence": "likely"
+      },
+      "fix_hint": "Create a decommission plan document (e.g., docs/decommission-plan.md) describing how to remove the previous service identity, app registrations, and access grants after cutover."
+    }
+  ]
+}
