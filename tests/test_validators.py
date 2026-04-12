@@ -10,6 +10,7 @@ from ready.validators import (
     Status,
     Severity,
     CheckType,
+    get_registry,
 )
 
 
@@ -599,3 +600,35 @@ class TestEvidencePaths:
         }
         result = evaluate_checkpoint(cp, str(sample_repo), {}, {})
         assert result.status == Status.PASS
+
+
+class TestPluginRegistry:
+    """Smoke tests for the plugin auto-discovery system."""
+
+    def test_default_registry_has_all_methods(self):
+        registry = get_registry()
+        expected = {
+            "file_exists", "glob", "glob_all", "file_count",
+            "grep", "grep_all", "grep_count",
+            "json_path", "external_attestation", "hybrid",
+        }
+        assert expected.issubset(set(registry.methods()))
+
+    def test_plugin_base_class_enforces_verify(self):
+        from ready.plugins.base import PluginContext, VerificationPlugin
+
+        class BrokenPlugin(VerificationPlugin):
+            method_name = "broken"
+
+        with pytest.raises(NotImplementedError):
+            BrokenPlugin().verify({}, PluginContext(repo_root="/tmp"))
+
+    def test_registry_rejects_plugin_without_method_name(self):
+        from ready.plugins.base import VerificationPlugin
+        from ready.plugins.registry import PluginRegistry
+
+        class Nameless(VerificationPlugin):
+            pass
+
+        with pytest.raises(ValueError):
+            PluginRegistry().register(Nameless())
