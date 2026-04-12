@@ -233,7 +233,6 @@ class JiraAdapter(WorkItemAdapter):
 
     def close(self, item_id: str, reason: str = "Resolved by scan") -> bool:
         try:
-            # Add comment
             self._request("POST", f"/issue/{item_id}/comment", {
                 "body": {
                     "version": 1,
@@ -242,7 +241,6 @@ class JiraAdapter(WorkItemAdapter):
                 }
             })
 
-            # Get available transitions and find a "Done" state
             transitions = self._request("GET", f"/issue/{item_id}/transitions")
             done_id = None
             for t in transitions.get("transitions", []):
@@ -253,6 +251,32 @@ class JiraAdapter(WorkItemAdapter):
             if done_id:
                 self._request("POST", f"/issue/{item_id}/transitions", {
                     "transition": {"id": done_id}
+                })
+            return True
+        except RuntimeError:
+            return False
+
+    def reopen(self, item_id: str, reason: str = "Regression detected by scan") -> bool:
+        try:
+            self._request("POST", f"/issue/{item_id}/comment", {
+                "body": {
+                    "version": 1,
+                    "type": "doc",
+                    "content": [{"type": "paragraph", "content": [{"type": "text", "text": reason}]}],
+                }
+            })
+
+            transitions = self._request("GET", f"/issue/{item_id}/transitions")
+            reopen_id = None
+            for t in transitions.get("transitions", []):
+                cat = t.get("to", {}).get("statusCategory", {}).get("key", "")
+                if cat in ("new", "indeterminate"):
+                    reopen_id = t["id"]
+                    break
+
+            if reopen_id:
+                self._request("POST", f"/issue/{item_id}/transitions", {
+                    "transition": {"id": reopen_id}
                 })
             return True
         except RuntimeError:

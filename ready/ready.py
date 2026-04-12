@@ -19,6 +19,9 @@ Usage:
     ready history [BASELINES...]   Show readiness trend from baseline snapshots
     ready items --create           Propose + create work items
     ready items --verify           Cross-check work items vs code
+    ready items --verify --auto-reopen  Reopen closed items for regressions
+    ready items --verify --dry-run Show what would happen without API calls
+    ready items --create --force   Override branch safety check
     ready audit                    Audit exception health, definition staleness, and score health
     ready infer                    Propose tailored checkpoints (AI-powered if ANTHROPIC_API_KEY set)
     ready infer --count N          Request N AI proposals (default: 8)
@@ -36,6 +39,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -1234,6 +1238,34 @@ def _save_work_items(readiness_dir: str, data: dict) -> None:
         json.dump(data, f, indent=2)
 
 
+def _get_current_branch() -> str | None:
+    """Return current git branch name, or None if not in a git repo."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
+def _append_sync_log(readiness_dir: str, entry: dict) -> None:
+    """Append a mutation entry to .readiness/sync-log.json."""
+    log_path = os.path.join(readiness_dir, "sync-log.json")
+    if os.path.isfile(log_path):
+        with open(log_path) as f:
+            log = json.load(f)
+    else:
+        log = []
+    entry["timestamp"] = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
+    log.append(entry)
+    with open(log_path, "w") as f:
+        json.dump(log, f, indent=2)
+
+
 def cmd_items(args):
     """Work item management — create items for gaps, verify closed items vs code."""
     repo_root = find_repo_root()
@@ -1242,6 +1274,18 @@ def cmd_items(args):
     if not os.path.isdir(readiness_dir):
         print(f"{RED}✗ No {READINESS_DIR}/ found. Run 'ready init' first.{RESET}")
         return 1
+
+    dry_run = getattr(args, "dry_run", False)
+    auto_reopen = getattr(args, "auto_reopen", False)
+    force = getattr(args, "force", False)
+
+    will_mutate = args.create or args.verify
+    if will_mutate and not dry_run and not force:
+        branch = _get_current_branch()
+        if branch and branch not in ("main", "master"):
+            print(f"{RED}✗ Refusing to mutate work items from branch '{branch}'.{RESET}")
+            print(f"  {DIM}Run from main/master, or use --force to override.{RESET}")
+            return 1
 
     try:
         adapter = _load_adapter(args.adapter)
@@ -1315,6 +1359,11 @@ def cmd_items(args):
                     print(f"    {DIM}Skipped.{RESET}")
                     continue
 
+            if dry_run:
+                print(f"    {CYAN}[dry-run] Would create work item{RESET}")
+                created += 1
+                continue
+
             from ready.adapters import WorkItemDraft
             draft = WorkItemDraft(
                 checkpoint_id=r.checkpoint_id,
@@ -1337,17 +1386,27 @@ def cmd_items(args):
                 }
                 print(f"    {GREEN}✓ Created: {item.url}{RESET}")
                 created += 1
+                _append_sync_log(readiness_dir, {
+                    "action": "create",
+                    "checkpoint_id": r.checkpoint_id,
+                    "item_id": item.id,
+                    "previous_state": None,
+                    "new_state": "open",
+                    "reason": f"Gap detected: {r.title}",
+                })
             except Exception as e:
                 print(f"    {RED}✗ Failed to create: {e}{RESET}")
 
-        work_items["items"] = tracked
-        _save_work_items(readiness_dir, work_items)
-        print(f"\n{GREEN}✓ {created} work item(s) created, {skipped} already tracked.{RESET}")
-        print(f"{DIM}Tracked in {READINESS_DIR}/{WORK_ITEMS_FILE}{RESET}")
+        if not dry_run:
+            work_items["items"] = tracked
+            _save_work_items(readiness_dir, work_items)
+        label = "[dry-run] Would create" if dry_run else "created"
+        print(f"\n{GREEN}✓ {created} work item(s) {label}, {skipped} already tracked.{RESET}")
+        if not dry_run:
+            print(f"{DIM}Tracked in {READINESS_DIR}/{WORK_ITEMS_FILE}{RESET}")
         return 0
 
     elif args.verify:
-        # Cross-check: regression (item closed but code still fails) or stale (code passes but item open)
         if not tracked:
             print(f"{YELLOW}No tracked work items found. Run 'ready items --create' first.{RESET}")
             return 0
@@ -1358,7 +1417,10 @@ def cmd_items(args):
         stale = []
         ok = []
 
-        print(f"\n{BOLD}Work item verification for {result.service_name}{RESET}\n")
+        if dry_run:
+            print(f"\n{CYAN}[dry-run]{RESET} {BOLD}Work item verification for {result.service_name}{RESET}\n")
+        else:
+            print(f"\n{BOLD}Work item verification for {result.service_name}{RESET}\n")
 
         for cp_id, item_info in tracked.items():
             remote = adapter.get_status(item_info["id"])
@@ -1382,6 +1444,24 @@ def cmd_items(args):
             for cp_id, remote, scan_r in regressions:
                 print(f"   {RED}✗{RESET} [{cp_id}] {scan_r.title}")
                 print(f"     {DIM}Work item: {remote.url} (status: {remote.status}){RESET}")
+
+                if auto_reopen:
+                    if dry_run:
+                        print(f"     {CYAN}[dry-run] Would reopen{RESET}")
+                    else:
+                        success = adapter.reopen(remote.id, f"Regression detected — checkpoint '{cp_id}' is failing again.")
+                        if success:
+                            print(f"     {GREEN}✓ Reopened.{RESET}")
+                            _append_sync_log(readiness_dir, {
+                                "action": "reopen",
+                                "checkpoint_id": cp_id,
+                                "item_id": remote.id,
+                                "previous_state": remote.status,
+                                "new_state": "open",
+                                "reason": f"Regression: {scan_r.title} still failing",
+                            })
+                        else:
+                            print(f"     {RED}✗ Could not reopen.{RESET}")
             print()
 
         if stale:
@@ -1390,11 +1470,22 @@ def cmd_items(args):
                 print(f"   {YELLOW}○{RESET} [{cp_id}] {scan_r.title}")
                 print(f"     {DIM}Work item: {remote.url} (status: {remote.status}){RESET}")
 
-                if args.yes or input(f"  Close work item {remote.id}? [y/N] ").strip().lower() == "y":
+                if dry_run:
+                    if args.yes:
+                        print(f"     {CYAN}[dry-run] Would close{RESET}")
+                elif args.yes or input(f"  Close work item {remote.id}? [y/N] ").strip().lower() == "y":
                     success = adapter.close(remote.id, "Resolved — readiness check now passing.")
                     if success:
                         print(f"     {GREEN}✓ Closed.{RESET}")
                         del tracked[cp_id]
+                        _append_sync_log(readiness_dir, {
+                            "action": "close",
+                            "checkpoint_id": cp_id,
+                            "item_id": remote.id,
+                            "previous_state": remote.status,
+                            "new_state": "closed",
+                            "reason": "Readiness check now passing",
+                        })
                     else:
                         print(f"     {RED}✗ Could not close.{RESET}")
             print()
@@ -1402,8 +1493,9 @@ def cmd_items(args):
         if ok:
             print(f"{GREEN}✓ {len(ok)} work item(s) in sync{RESET}")
 
-        work_items["items"] = tracked
-        _save_work_items(readiness_dir, work_items)
+        if not dry_run:
+            work_items["items"] = tracked
+            _save_work_items(readiness_dir, work_items)
         return 1 if regressions else 0
 
     else:
@@ -2527,6 +2619,9 @@ def main():
     items_parser.add_argument("--verify", action="store_true", help="Verify work items vs code")
     items_parser.add_argument("--adapter", type=str, default="github", help="Adapter: github, ado, jira")
     items_parser.add_argument("--yes", "-y", action="store_true", help="Auto-approve all prompts")
+    items_parser.add_argument("--auto-reopen", action="store_true", help="Reopen closed items for regressions")
+    items_parser.add_argument("--dry-run", action="store_true", help="Show what would happen without making API calls")
+    items_parser.add_argument("--force", action="store_true", help="Override branch safety check")
 
     # audit
     subparsers.add_parser("audit", help="Audit exception health, definition staleness, and score health")
