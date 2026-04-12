@@ -1,10 +1,10 @@
-name: "Readiness Scan"
-description: "Run a readiness-as-code scan against your repo. Fail the build on blocking gaps."
+name: "Readiness as Code"
+description: "Know before you ship — continuous readiness scanning for operational, security, and engineering standards. One step to gate your CI on blocking gaps."
 author: "Jeremiah Walters"
 
 branding:
-  icon: "check-circle"
-  color: "green"
+  icon: "shield"
+  color: "blue"
 
 inputs:
   python-version:
