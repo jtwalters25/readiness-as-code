@@ -1,5 +1,5 @@
 name: "Readiness as Code"
-description: "Know before you ship — continuous readiness scanning for operational, security, and engineering standards. One step to gate your CI on blocking gaps."
+description: "Know before you ship — readiness scanning for operational, security, and engineering standards."
 author: "Jeremiah Walters"
 
 branding:
