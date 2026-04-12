@@ -71,21 +71,36 @@ def resolve_evidence_paths(
     return resolve_glob(target, repo_root)
 
 
+def _matches_exclude(rel_path: str, exclude_patterns: list[str]) -> bool:
+    """Return True if rel_path matches any of the exclude glob patterns."""
+    from fnmatch import fnmatch
+    for pat in exclude_patterns:
+        if fnmatch(rel_path, pat):
+            return True
+        if "/" not in pat and fnmatch(Path(rel_path).name, pat):
+            return True
+    return False
+
+
 def grep_file_list(
-    pattern: str, target_files: list[str], repo_root: str
+    pattern: str,
+    target_files: list[str],
+    repo_root: str,
+    exclude_paths: list[str] | None = None,
 ) -> list[str]:
     """Grep a regex across a pre-resolved file list, returning rel-path:line hits."""
     evidence: list[str] = []
     for filepath in target_files:
         if not os.path.isfile(filepath):
             continue
+        rel = os.path.relpath(filepath, repo_root)
+        if exclude_paths and _matches_exclude(rel, exclude_paths):
+            continue
         try:
             with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
                 for line_num, line in enumerate(f, 1):
                     if re.search(pattern, line, re.IGNORECASE):
-                        evidence.append(
-                            f"{os.path.relpath(filepath, repo_root)}:{line_num}"
-                        )
+                        evidence.append(f"{rel}:{line_num}")
         except (IOError, OSError):
             continue
     return evidence

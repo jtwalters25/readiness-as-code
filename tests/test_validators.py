@@ -956,3 +956,59 @@ class TestBidirectionalSync:
         assert args.auto_reopen is True
         assert args.dry_run is True
         assert args.force is True
+
+
+class TestExcludePaths:
+    """Tests for grep exclude_paths support."""
+
+    def test_exclude_paths_filters_test_files(self, tmp_path):
+        from ready.plugins.utils import grep_file_list
+
+        src = tmp_path / "src" / "config.py"
+        src.parent.mkdir()
+        src.write_text('api_key = "real-secret-key-12345"\n')
+
+        test = tmp_path / "tests" / "test_auth.py"
+        test.parent.mkdir()
+        test.write_text('mock_token = "fake-token-12345678"\n')
+
+        files = [str(src), str(test)]
+        excludes = ["tests/**"]
+
+        hits = grep_file_list(
+            r"(api_key|mock_token)\s*=\s*['\"][^'\"]{8,}",
+            files, str(tmp_path), exclude_paths=excludes,
+        )
+        assert len(hits) == 1
+        assert "src/config.py" in hits[0]
+
+    def test_no_exclude_matches_all(self, tmp_path):
+        from ready.plugins.utils import grep_file_list
+
+        src = tmp_path / "app.py"
+        src.write_text('secret = "mysecretvalue"\n')
+
+        test = tmp_path / "tests" / "test_app.py"
+        test.parent.mkdir()
+        test.write_text('secret = "fakesecretval"\n')
+
+        files = [str(src), str(test)]
+        hits = grep_file_list(
+            r"secret\s*=\s*['\"][^'\"]{8,}",
+            files, str(tmp_path),
+        )
+        assert len(hits) == 2
+
+    def test_exclude_nested_test_dirs(self, tmp_path):
+        from ready.plugins.utils import grep_file_list
+
+        test_file = tmp_path / "src" / "__tests__" / "auth.test.js"
+        test_file.parent.mkdir(parents=True)
+        test_file.write_text('const token = "test-bearer-token-abc"\n')
+
+        files = [str(test_file)]
+        hits = grep_file_list(
+            r"token\s*=\s*['\"][^'\"]{10,}",
+            files, str(tmp_path), exclude_paths=["**/__tests__/**"],
+        )
+        assert len(hits) == 0

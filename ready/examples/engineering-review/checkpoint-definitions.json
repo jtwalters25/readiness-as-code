@@ -73,7 +73,7 @@
       "confidence": "likely",
       "verification": {
         "method": "glob",
-        "pattern": "{validators,validation,sanitize,schemas}/**",
+        "pattern": "{validators,validation,sanitize,schemas}/**,**/validators/**,**/validation/**,**/sanitize/**,**/schemas/**",
         "min_matches": 1
       },
       "applicable_tags": ["customer-facing"],
@@ -130,7 +130,7 @@
       "confidence": "likely",
       "verification": {
         "method": "grep_all",
-        "patterns": ["(credential|secret|gitleaks|trufflehog|detect-secrets)", "(dependabot|snyk|safety|audit|trivy|grype)", "(bandit|semgrep|codeql|sonar|eslint|flake8)"],
+        "patterns": ["(credential|secret|gitleaks|trufflehog|detect-secrets|policheck|credentialscanner)", "(dependabot|snyk|safety|audit|trivy|grype|binskim|tsa)", "(bandit|semgrep|codeql|sonar|eslint|flake8|fxcop|roslyn)"],
         "target": "{.github/**/*.yml,.github/**/*.yaml,.pipelines/**/*.yml,azure-pipelines.yml,.gitlab-ci.yml,Jenkinsfile}"
       },
       "applicable_tags": ["cloud-hosted", "customer-facing"],
@@ -170,10 +170,19 @@
         "method": "grep",
         "pattern": "(password\\s*=\\s*['\"][^'\"]{4,}|api_key\\s*=\\s*['\"][^'\"]{8,}|secret\\s*=\\s*['\"][^'\"]{8,}|token\\s*=\\s*['\"][^'\"]{10,})",
         "target": "**/*.{py,ts,js,go,java,cs}",
-        "pass_condition": "absent"
+        "pass_condition": "absent",
+        "exclude_paths": [
+          "tests/**",
+          "**/__tests__/**",
+          "**/*.test.*",
+          "**/*_test.*",
+          "**/test_*",
+          "**/fixtures/**",
+          "**/testdata/**"
+        ]
       },
       "applicable_tags": [],
-      "fix_hint": "Move all secrets to environment variables or a secrets manager. Use os.environ, dotenv, or Key Vault references.",
+      "fix_hint": "Move all secrets to environment variables or a secrets manager. Use os.environ, dotenv, or Key Vault references. Note: test files are excluded from this check.",
       "doc_link": ""
     },
 
@@ -511,7 +520,7 @@
       "confidence": "likely",
       "verification": {
         "method": "glob",
-        "pattern": "{openapi.yaml,openapi.json,swagger.yaml,swagger.json,api/**/*.yaml,docs/api*}",
+        "pattern": "{openapi.yaml,openapi.json,swagger.yaml,swagger.json,api/**/*.yaml,docs/api*,docs/**openapi*,docs/**swagger*}",
         "min_matches": 1
       },
       "applicable_tags": ["customer-facing"],

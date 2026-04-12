@@ -19,9 +19,10 @@ class GrepPlugin(VerificationPlugin):
         pattern = verification.get("pattern", "")
         min_matches = verification.get("min_matches", 1)
         pass_condition = verification.get("pass_condition", "present")
+        exclude_paths = verification.get("exclude_paths")
 
         target_files = resolve_evidence_paths(verification, context.repo_root)
-        evidence = grep_file_list(pattern, target_files, context.repo_root)
+        evidence = grep_file_list(pattern, target_files, context.repo_root, exclude_paths)
 
         if pass_condition == "absent":
             return VerificationResult(passed=(len(evidence) == 0), evidence=evidence)

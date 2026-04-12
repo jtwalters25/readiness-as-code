@@ -91,7 +91,7 @@
       "confidence": "likely",
       "verification": {
         "method": "grep",
-        "pattern": "(canary|feature.?flag|ring.?deploy|progressive|launchdarkly|flagsmith|unleash|gradual)",
+        "pattern": "(canary|feature.?flag|ring.?deploy|progressive|launchdarkly|flagsmith|unleash|gradual|blue.?green|traffic.?split|rolling.?update)",
         "target": "{**/*.py,**/*.ts,**/*.js,**/*.yaml,**/*.yml}"
       },
       "applicable_tags": ["cloud-hosted", "customer-facing"],
@@ -129,7 +129,7 @@
       "confidence": "likely",
       "verification": {
         "method": "glob",
-        "pattern": "{docs/*postmortem*,docs/*post_mortem*,docs/*incident*,docs/templates/postmortem*,postmortem-template*}",
+        "pattern": "{docs/*postmortem*,docs/*post_mortem*,docs/*POST_MORTEM*,docs/*incident*,docs/templates/postmortem*,postmortem-template*,POST_MORTEM*}",
         "min_matches": 1
       },
       "applicable_tags": ["cloud-hosted"],
@@ -205,7 +205,7 @@
       "confidence": "likely",
       "verification": {
         "method": "glob",
-        "pattern": "{docs/FAILURE_MODES*,docs/failure-modes*,docs/DEGRADED*,docs/resilience*}",
+        "pattern": "{docs/FAILURE_MODES*,docs/failure-modes*,docs/failure_modes*,docs/DEGRADED*,docs/resilience*}",
         "min_matches": 1
       },
       "applicable_tags": ["cloud-hosted"],
