@@ -23,6 +23,9 @@ Usage:
     ready infer                    Propose tailored checkpoints (AI-powered if ANTHROPIC_API_KEY set)
     ready infer --count N          Request N AI proposals (default: 8)
     ready infer --no-ai            Force pattern-based mode even if API key is set
+    ready watch                    Watch for changes and re-scan continuously
+    ready watch --interval 5       Custom poll interval (seconds)
+    ready watch --clear            Clear screen on each update
     ready aggregate PATHS...       Cross-repo heatmap (CLI)
     ready aggregate PATHS... --html  Generate self-contained HTML heatmap report
 """
@@ -2547,6 +2550,23 @@ def main():
         help="Force pattern-based proposals even if ANTHROPIC_API_KEY is set",
     )
 
+    # watch
+    watch_parser = subparsers.add_parser(
+        "watch", help="Watch for file changes and re-scan continuously"
+    )
+    watch_parser.add_argument(
+        "--interval",
+        type=float,
+        default=2.0,
+        metavar="SECONDS",
+        help="Poll interval in seconds (default: 2.0)",
+    )
+    watch_parser.add_argument(
+        "--clear",
+        action="store_true",
+        help="Clear the screen on each update",
+    )
+
     # aggregate
     agg_parser = subparsers.add_parser("aggregate", help="Cross-repo heatmap")
     agg_parser.add_argument("paths", nargs="*", help="Paths to baseline files")
@@ -2588,6 +2608,9 @@ def main():
         sys.exit(cmd_audit(args))
     elif args.command == "infer":
         sys.exit(cmd_infer(args))
+    elif args.command == "watch":
+        from ready.watch import cmd_watch
+        sys.exit(cmd_watch(args))
     elif args.command == "aggregate":
         sys.exit(cmd_aggregate(args))
     else:
