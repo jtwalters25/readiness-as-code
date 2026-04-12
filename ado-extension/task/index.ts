@@ -4,8 +4,8 @@
  * Execution flow:
  *   1. Read task inputs
  *   2. Verify Python is available
- *   3. pip install ready
- *   4. Run: ready scan --json [--calibrate] [--pack X]
+ *   3. pip install readiness-as-code
+ *   4. Run: python -m ready scan --json [--calibrate] [--pack X]
  *   5. Parse ScanResult JSON from stdout
  *   6. Set output variables (ready.score, ready.blocking, ready.warnings)
  *   7. Optionally publish JUnit test results
@@ -57,32 +57,26 @@ async function run(): Promise<void> {
 
     const installResult = tl.execSync(pip, ["install", "--quiet", "readiness-as-code"]);
     if (installResult.code !== 0) {
-      tl.setResult(tl.TaskResult.Failed, `pip install ready failed: ${installResult.stderr}`);
+      tl.setResult(tl.TaskResult.Failed, `pip install readiness-as-code failed: ${installResult.stderr}`);
       return;
     }
 
     // ── Build scan command ────────────────────────────────────────────────────
-    const readyBin = tl.which("ready");
-    if (!readyBin) {
-      tl.setResult(
-        tl.TaskResult.Failed,
-        "ready command not found after install. Check that Python scripts directory is on PATH."
-      );
-      return;
-    }
-
-    const scanArgs = ["scan", "--json"];
+    // Use `python -m ready` instead of the `ready` binary — the binary requires
+    // the Python scripts directory to be on PATH, which is not guaranteed on all
+    // build agents. `python -m ready` always works as long as Python is available.
+    const scanArgs = ["-m", "ready", "scan", "--json"];
     if (calibrate) scanArgs.push("--calibrate");
     if (pack) scanArgs.push("--pack", pack);
 
     // ── Run scan ──────────────────────────────────────────────────────────────
-    console.log(`Running: ready ${scanArgs.join(" ")}`);
+    console.log(`Running: python ${scanArgs.join(" ")}`);
     console.log(`Working directory: ${workingDirectory}`);
 
     let stdout = "";
     let stderr = "";
 
-    const scanCode = await tl.exec(readyBin, scanArgs, {
+    const scanCode = await tl.exec(pythonPath, scanArgs, {
       cwd: workingDirectory,
       silent: false,
       outStream: {
