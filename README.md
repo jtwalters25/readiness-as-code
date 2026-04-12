@@ -200,6 +200,42 @@ ready aggregate PATHS...               # Cross-repo heatmap from multiple baseli
 ready aggregate PATHS... --html        # Generate self-contained HTML heatmap report
 ```
 
+## GitHub Action
+
+Add readiness gating to any repo with one step:
+
+```yaml
+# .github/workflows/readiness.yml
+name: Readiness Check
+on: [pull_request]
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jtwalters25/readiness-as-code@v0.7.0
+```
+
+With options:
+
+```yaml
+      - uses: jtwalters25/readiness-as-code@v0.7.0
+        with:
+          pack: web-service           # auto-init with a checkpoint pack
+          fail-on-red: "true"         # fail the build on blocking gaps
+          baseline: .readiness/baseline.json
+          markdown: .readiness/gaps.md
+```
+
+Outputs are available for downstream steps:
+
+```yaml
+      - uses: jtwalters25/readiness-as-code@v0.7.0
+        id: ready
+      - run: echo "Readiness: ${{ steps.ready.outputs.readiness-pct }}%"
+```
+
 ## AI Integration
 
 ready ships a [Model Context Protocol](https://modelcontextprotocol.io) server (`ready-mcp`) so any MCP client — Claude, Cursor, Copilot — can run scans and inspect checkpoints directly.

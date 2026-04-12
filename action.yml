@@ -1,0 +1,144 @@
+name: "Readiness Scan"
+description: "Run a readiness-as-code scan against your repo. Fail the build on blocking gaps."
+author: "Jeremiah Walters"
+
+branding:
+  icon: "check-circle"
+  color: "green"
+
+inputs:
+  python-version:
+    description: "Python version to use"
+    required: false
+    default: "3.11"
+  pack:
+    description: "Checkpoint pack to use if no .readiness/ dir exists (e.g. web-service, data-pipeline)"
+    required: false
+    default: ""
+  fail-on-red:
+    description: "Fail the action if any red (blocking) checks fail"
+    required: false
+    default: "true"
+  args:
+    description: "Additional arguments to pass to `ready scan`"
+    required: false
+    default: ""
+  baseline:
+    description: "Path to write baseline snapshot (empty to skip)"
+    required: false
+    default: ""
+  markdown:
+    description: "Path to write markdown gaps checklist (empty to skip)"
+    required: false
+    default: ""
+
+outputs:
+  readiness-pct:
+    description: "Readiness percentage (0-100)"
+    value: ${{ steps.scan.outputs.readiness_pct }}
+  failing-red:
+    description: "Number of blocking (red) failures"
+    value: ${{ steps.scan.outputs.failing_red }}
+  failing-yellow:
+    description: "Number of warning (yellow) failures"
+    value: ${{ steps.scan.outputs.failing_yellow }}
+  passing:
+    description: "Number of passing checks"
+    value: ${{ steps.scan.outputs.passing }}
+  is-ready:
+    description: "'true' if no blocking failures, 'false' otherwise"
+    value: ${{ steps.scan.outputs.is_ready }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install readiness-as-code
+      shell: bash
+      run: pip install readiness-as-code
+
+    - name: Initialize (if needed)
+      shell: bash
+      run: |
+        if [ ! -d ".readiness" ] && [ -n "${{ inputs.pack }}" ]; then
+          ready init --pack "${{ inputs.pack }}"
+        fi
+
+    - name: Run readiness scan
+      id: scan
+      shell: bash
+      run: |
+        ARGS="--json"
+
+        if [ -n "${{ inputs.baseline }}" ]; then
+          ARGS="$ARGS --baseline ${{ inputs.baseline }}"
+        fi
+
+        if [ -n "${{ inputs.markdown }}" ]; then
+          ARGS="$ARGS --markdown ${{ inputs.markdown }}"
+        fi
+
+        if [ -n "${{ inputs.args }}" ]; then
+          ARGS="$ARGS ${{ inputs.args }}"
+        fi
+
+        set +e
+        OUTPUT=$(ready scan $ARGS 2>&1)
+        EXIT_CODE=$?
+        set -e
+
+        echo "$OUTPUT"
+
+        # Parse JSON output for structured outputs
+        if echo "$OUTPUT" | python3 -c "
+        import sys, json
+        for line in sys.stdin:
+            line = line.strip()
+            if line.startswith('{'):
+                try:
+                    data = json.loads(line)
+                    s = data.get('summary', {})
+                    print(f\"readiness_pct={s.get('readiness_pct', 0)}\")
+                    print(f\"failing_red={s.get('failing_red', 0)}\")
+                    print(f\"failing_yellow={s.get('failing_yellow', 0)}\")
+                    print(f\"passing={s.get('passing', 0)}\")
+                    print(f\"is_ready={'true' if s.get('failing_red', 1) == 0 else 'false'}\")
+                    break
+                except json.JSONDecodeError:
+                    pass
+        " >> "$GITHUB_OUTPUT" 2>/dev/null; then
+          echo "Scan results parsed successfully"
+        else
+          echo "readiness_pct=0" >> "$GITHUB_OUTPUT"
+          echo "failing_red=1" >> "$GITHUB_OUTPUT"
+          echo "failing_yellow=0" >> "$GITHUB_OUTPUT"
+          echo "passing=0" >> "$GITHUB_OUTPUT"
+          echo "is_ready=false" >> "$GITHUB_OUTPUT"
+        fi
+
+        if [ "${{ inputs.fail-on-red }}" = "true" ] && [ $EXIT_CODE -ne 0 ]; then
+          echo "::error::Readiness scan found blocking gaps"
+          exit 1
+        fi
+
+    - name: Upload baseline artifact
+      if: inputs.baseline != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: readiness-baseline
+        path: ${{ inputs.baseline }}
+        retention-days: 90
+        if-no-files-found: ignore
+
+    - name: Upload markdown report
+      if: inputs.markdown != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: readiness-report
+        path: ${{ inputs.markdown }}
+        retention-days: 90
+        if-no-files-found: ignore
