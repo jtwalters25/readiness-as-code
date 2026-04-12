@@ -1012,3 +1012,72 @@ class TestExcludePaths:
             files, str(tmp_path), exclude_paths=["**/__tests__/**"],
         )
         assert len(hits) == 0
+
+
+class TestAnalytics:
+    """Tests for scan history logging and analytics."""
+
+    def _make_scan_result(self, pct=80.0, passing=8, failing_red=1, checkpoints=None):
+        from ready.engine import ScanResult, CheckResult, Status, Severity, CheckType
+        results = []
+        if checkpoints:
+            for cp_id, status_str in checkpoints.items():
+                results.append(CheckResult(
+                    checkpoint_id=cp_id,
+                    title=cp_id,
+                    status=Status(status_str),
+                    severity=Severity.RED,
+                    check_type=CheckType.CODE,
+                ))
+        return ScanResult(
+            service_name="test-svc",
+            scan_time="2026-04-12T00:00:00Z",
+            total=10,
+            passing=passing,
+            failing_red=failing_red,
+            failing_yellow=0,
+            exceptions=0,
+            skipped=0,
+            readiness_pct=pct,
+            results=results,
+        )
+
+    def test_append_scan_event(self, tmp_path):
+        from ready.analytics import append_scan_event, load_history
+
+        result = self._make_scan_result(checkpoints={"cp-1": "pass", "cp-2": "fail"})
+        append_scan_event(str(tmp_path), result, duration_ms=150)
+
+        history = load_history(str(tmp_path))
+        assert len(history) == 1
+        assert history[0]["readiness_pct"] == 80.0
+        assert history[0]["duration_ms"] == 150
+        assert history[0]["checkpoints"]["cp-1"]["status"] == "pass"
+        assert history[0]["checkpoints"]["cp-2"]["status"] == "fail"
+        assert "timestamp" in history[0]
+        assert "branch" in history[0]
+        assert "trigger" in history[0]
+
+    def test_append_multiple_events(self, tmp_path):
+        from ready.analytics import append_scan_event, load_history
+
+        r1 = self._make_scan_result(pct=60.0, checkpoints={"cp-1": "fail"})
+        r2 = self._make_scan_result(pct=80.0, checkpoints={"cp-1": "pass"})
+        append_scan_event(str(tmp_path), r1)
+        append_scan_event(str(tmp_path), r2)
+
+        history = load_history(str(tmp_path))
+        assert len(history) == 2
+        assert history[0]["readiness_pct"] == 60.0
+        assert history[1]["readiness_pct"] == 80.0
+
+    def test_load_empty_history(self, tmp_path):
+        from ready.analytics import load_history
+        assert load_history(str(tmp_path)) == []
+
+    def test_format_duration(self):
+        from ready.analytics import _format_duration
+        assert _format_duration(30) == "30s"
+        assert _format_duration(120) == "2m"
+        assert _format_duration(7200) == "2.0h"
+        assert _format_duration(172800) == "2.0d"

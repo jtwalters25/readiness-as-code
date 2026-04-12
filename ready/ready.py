@@ -29,6 +29,9 @@ Usage:
     ready watch                    Watch for changes and re-scan continuously
     ready watch --interval 5       Custom poll interval (seconds)
     ready watch --clear            Clear screen on each update
+    ready trends                   Show readiness score trends from scan history
+    ready trends --last 50         Show last 50 scans
+    ready health                   Analyze checkpoint health — chronic failures, flapping, MTTR
     ready aggregate PATHS...       Cross-repo heatmap (CLI)
     ready aggregate PATHS... --html  Generate self-contained HTML heatmap report
 """
@@ -657,6 +660,9 @@ def cmd_scan(args):
         # Pad to 72 chars so previous longer lines are fully overwritten
         print(f"{line:<72}", end="", flush=True)
 
+    import time as _time
+    _scan_start = _time.monotonic()
+
     try:
         result = run_scan(
             repo_root=repo_root,
@@ -683,6 +689,15 @@ def cmd_scan(args):
     # Clear the progress line before printing results
     if show_progress:
         print(f"\r{' ' * 72}\r", end="", flush=True)
+
+    # Append scan event to history
+    _scan_duration = int((_time.monotonic() - _scan_start) * 1000)
+    try:
+        from ready.analytics import append_scan_event
+        scan_history_dir = readiness_dir if os.path.isdir(readiness_dir) else os.path.join(repo_root, READINESS_DIR)
+        append_scan_event(scan_history_dir, result, _scan_duration)
+    except Exception:
+        pass
 
     # Markdown report — runs in every output mode, before any early return
     if getattr(args, "markdown", None):
@@ -2662,6 +2677,13 @@ def main():
         help="Clear the screen on each update",
     )
 
+    # trends
+    trends_parser = subparsers.add_parser("trends", help="Show readiness score trends from scan history")
+    trends_parser.add_argument("--last", type=int, default=20, metavar="N", help="Show last N scans (default: 20)")
+
+    # health
+    subparsers.add_parser("health", help="Analyze checkpoint health — chronic failures, flapping, MTTR")
+
     # aggregate
     agg_parser = subparsers.add_parser("aggregate", help="Cross-repo heatmap")
     agg_parser.add_argument("paths", nargs="*", help="Paths to baseline files")
@@ -2708,6 +2730,12 @@ def main():
         sys.exit(cmd_watch(args))
     elif args.command == "aggregate":
         sys.exit(cmd_aggregate(args))
+    elif args.command == "trends":
+        from ready.analytics import cmd_trends
+        sys.exit(cmd_trends(args))
+    elif args.command == "health":
+        from ready.analytics import cmd_health
+        sys.exit(cmd_health(args))
     else:
         parser.print_help()
         sys.exit(0)
