@@ -8,6 +8,7 @@ Usage:
     ready scan --calibrate         Report-only (no exit code failure)
     ready scan --json              Machine-readable output
     ready scan --baseline FILE     Write baseline snapshot
+    ready scan --markdown FILE     Write a markdown gaps checklist to FILE
     ready scan --suggest-tuning    Show checkpoint tuning suggestions after scan
     ready doctor                   Diagnose setup — validate config, JSON files, CI, adapters
     ready init                     Scaffold .readiness/ directory
@@ -656,9 +657,44 @@ def cmd_scan(args):
     if show_progress:
         print(f"\r{' ' * 72}\r", end="", flush=True)
 
+    # Markdown report — runs in every output mode, before any early return
+    if getattr(args, "markdown", None):
+        from ready.formatters.markdown import format_markdown
+
+        markdown_path = args.markdown
+        if not os.path.isabs(markdown_path):
+            markdown_path = os.path.join(repo_root, markdown_path)
+        try:
+            with open(definitions_path, "r", encoding="utf-8") as f:
+                definitions_data = json.load(f)
+        except Exception:
+            definitions_data = {}
+        exceptions_list: list[dict] = []
+        if os.path.isfile(exceptions_path):
+            try:
+                with open(exceptions_path, "r", encoding="utf-8") as f:
+                    exceptions_list = json.load(f).get("exceptions", [])
+            except Exception:
+                exceptions_list = []
+        markdown_content = format_markdown(
+            definitions=definitions_data,
+            results=[r.to_dict() for r in result.results],
+            output_path=markdown_path,
+            service_name=result.service_name,
+            readiness_pct=result.readiness_pct,
+            exceptions=exceptions_list,
+        )
+        os.makedirs(os.path.dirname(markdown_path) or ".", exist_ok=True)
+        with open(markdown_path, "w", encoding="utf-8") as f:
+            f.write(markdown_content)
+        if not getattr(args, "json", False):
+            print(f"📄 Markdown report written to {markdown_path}")
+
     # JSON output (early return — machine consumers get stable format)
     if args.json:
-        print(json.dumps(result.to_dict(), indent=2))
+        from ready.formatters.json_formatter import format_json
+
+        print(format_json(result))
         if args.calibrate:
             return 0
         return 0 if result.is_ready else 1
@@ -672,148 +708,17 @@ def cmd_scan(args):
             json.dump(result.to_dict(), f, indent=2)
         print(f"{DIM}Baseline written to {baseline_path}{RESET}\n")
 
-    # Categorize results
-    red_fails = [r for r in result.results if r.status in (Status.FAIL, Status.EXPIRED_EXCEPTION) and r.severity == Severity.RED]
-    yellow_fails = [r for r in result.results if r.status in (Status.FAIL, Status.EXPIRED_EXCEPTION) and r.severity == Severity.YELLOW]
-    passing = [r for r in result.results if r.status == Status.PASS]
-    exceptions = [r for r in result.results if r.status == Status.EXCEPTION]
-    needs_review = [r for r in result.results if r.status == Status.NEEDS_REVIEW]
-    skipped = [r for r in result.results if r.status == Status.SKIP]
+    # Terminal output (score-first, with optional verbose detail)
+    from ready.formatters.terminal import print_terminal
 
-    # Drift delta (compare to last committed baseline)
-    drift_str = ""
-    if prev_baseline:
-        prev_pct = prev_baseline.get("summary", {}).get("readiness_pct", 0)
-        delta = result.readiness_pct - prev_pct
-        if abs(delta) >= 0.5:
-            if delta > 0:
-                drift_str = f"   {GREEN}▲ +{delta:.0f}%{RESET}"
-            else:
-                drift_str = f"   {RED}▼ {delta:.0f}%{RESET}"
-
-    # Summary line
-    pct = result.readiness_pct
-    pct_color = GREEN if result.is_ready else RED
-    if result.is_ready and not yellow_fails:
-        status_str = f"{GREEN}✓{RESET}"
-    else:
-        parts = []
-        if red_fails:
-            parts.append(f"{RED}{len(red_fails)} blocking{RESET}")
-        if yellow_fails:
-            parts.append(f"{YELLOW}{len(yellow_fails)} warning{'s' if len(yellow_fails) != 1 else ''}{RESET}")
-        status_str = " · ".join(parts) if parts else ""
-
-    print()
-    print(f"{BOLD}ready? — {result.service_name}{RESET}   {pct_color}{pct:.0f}%{RESET}   {status_str}{drift_str}")
-
-    if auto_mode:
-        print(f"  {DIM}No .readiness/ found — running {auto_pack} defaults. Run 'ready init' to customize.{RESET}")
-
-    # All clear — single line output, we're done
-    if result.is_ready and not yellow_fails and not exceptions and not needs_review and not args.verbose:
-        print()
-        return 0
-
-    print()
-
-    if args.verbose:
-        # Full detail
-        if red_fails:
-            print(f"{RED}blocking ({len(red_fails)}){RESET}")
-            for r in red_fails:
-                print(f"  {RED}✗{RESET} {r.title}")
-                if r.message:
-                    print(f"    {DIM}{r.message}{RESET}")
-                if r.fix_hint:
-                    print(f"    {CYAN}→ {r.fix_hint}{RESET}")
-                if r.doc_link:
-                    print(f"    {DIM}{r.doc_link}{RESET}")
-                if r.evidence:
-                    for e in r.evidence[:5]:
-                        print(f"    {DIM}{e}{RESET}")
-            print()
-
-        if yellow_fails:
-            print(f"{YELLOW}warnings ({len(yellow_fails)}){RESET}")
-            for r in yellow_fails:
-                print(f"  {YELLOW}○{RESET} {r.title}")
-                if r.message:
-                    print(f"    {DIM}{r.message}{RESET}")
-                if r.fix_hint:
-                    print(f"    {CYAN}→ {r.fix_hint}{RESET}")
-                if r.evidence:
-                    for e in r.evidence[:3]:
-                        print(f"    {DIM}{e}{RESET}")
-            print()
-
-        if passing:
-            print(f"{GREEN}passing ({len(passing)}){RESET}")
-            for r in passing:
-                print(f"  {GREEN}✓{RESET} {r.title}")
-            print()
-
-        if exceptions:
-            print(f"exceptions ({len(exceptions)})")
-            for r in exceptions:
-                print(f"  {DIM}~ {r.title}{RESET}")
-                if r.message:
-                    print(f"    {DIM}{r.message}{RESET}")
-            print()
-
-        if needs_review:
-            print(f"{CYAN}needs review ({len(needs_review)}){RESET}")
-            for r in needs_review:
-                print(f"  {CYAN}?{RESET} {r.title}")
-            print()
-
-        if skipped:
-            print(f"{DIM}skipped ({len(skipped)}){RESET}")
-            for r in skipped:
-                print(f"  {DIM}  {r.title}{RESET}")
-            print()
-
-        # Flag checkpoint definitions past their review_by date
-        if os.path.isfile(definitions_path):
-            try:
-                with open(definitions_path) as _f:
-                    _defs = json.load(_f)
-                _today = datetime.date.today()
-                _stale = [
-                    cp for cp in _defs.get("checkpoints", [])
-                    if cp.get("review_by") and datetime.date.fromisoformat(cp["review_by"]) < _today
-                ]
-                if _stale:
-                    print(f"{YELLOW}definition review overdue ({len(_stale)}){RESET}")
-                    for cp in _stale:
-                        print(f"  {YELLOW}⏰{RESET} [{cp['id']}] {cp.get('title', '')}  {DIM}review_by {cp['review_by']}{RESET}")
-                    print(f"  {DIM}Run 'ready audit' for a full health report.{RESET}")
-                    print()
-            except (ValueError, KeyError):
-                pass
-
-    else:
-        # Default: blocking items with first evidence + fix hint
-        if red_fails:
-            for r in red_fails:
-                print(f"  {RED}✗{RESET} {r.title}")
-                if r.evidence:
-                    print(f"    {DIM}{r.evidence[0]}{RESET}")
-                if r.fix_hint:
-                    print(f"    {CYAN}→ {r.fix_hint}{RESET}")
-                print()
-
-        # Collapse everything else into one line
-        hidden = []
-        if yellow_fails:
-            hidden.append(f"{len(yellow_fails)} warning{'s' if len(yellow_fails) != 1 else ''}")
-        if exceptions:
-            hidden.append(f"{len(exceptions)} exception{'s' if len(exceptions) != 1 else ''}")
-        if needs_review:
-            hidden.append(f"{len(needs_review)} needs review")
-        if hidden:
-            print(f"  {DIM}+ {', '.join(hidden)}   (ready scan --verbose){RESET}")
-            print()
+    print_terminal(
+        result,
+        verbose=args.verbose,
+        auto_mode=auto_mode,
+        auto_pack=auto_pack,
+        prev_baseline=prev_baseline,
+        definitions_path=definitions_path,
+    )
 
     # Tuning suggestions
     if getattr(args, "suggest_tuning", False):
@@ -2542,6 +2447,12 @@ def main():
     scan_parser.add_argument("--calibrate", action="store_true", help="Report-only mode")
     scan_parser.add_argument("--json", action="store_true", help="JSON output")
     scan_parser.add_argument("--baseline", type=str, help="Write baseline to file")
+    scan_parser.add_argument(
+        "--markdown",
+        type=str,
+        metavar="FILE",
+        help="Write a markdown gaps checklist to FILE (runs alongside normal output)",
+    )
     scan_parser.add_argument(
         "--suggest-tuning",
         dest="suggest_tuning",
