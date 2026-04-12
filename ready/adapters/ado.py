@@ -161,3 +161,14 @@ class AzureDevOpsAdapter(WorkItemAdapter):
             return True
         except RuntimeError:
             return False
+
+    def reopen(self, item_id: str, reason: str = "Regression detected by scan") -> bool:
+        try:
+            patch_doc = [
+                {"op": "add", "path": "/fields/System.State", "value": "New"},
+                {"op": "add", "path": "/fields/System.History", "value": reason},
+            ]
+            self._request("PATCH", f"/wit/workitems/{item_id}", patch_doc)
+            return True
+        except RuntimeError:
+            return False

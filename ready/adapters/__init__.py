@@ -54,3 +54,8 @@ class WorkItemAdapter(ABC):
     def close(self, item_id: str, reason: str = "Resolved by scan") -> bool:
         """Close a work item."""
         ...
+
+    @abstractmethod
+    def reopen(self, item_id: str, reason: str = "Regression detected by scan") -> bool:
+        """Reopen a previously closed work item."""
+        ...

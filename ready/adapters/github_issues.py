@@ -144,3 +144,11 @@ class GitHubIssuesAdapter(WorkItemAdapter):
             return True
         except RuntimeError:
             return False
+
+    def reopen(self, item_id: str, reason: str = "Regression detected by scan") -> bool:
+        try:
+            self._request("POST", f"/issues/{item_id}/comments", {"body": reason})
+            self._request("PATCH", f"/issues/{item_id}", {"state": "open"})
+            return True
+        except RuntimeError:
+            return False
