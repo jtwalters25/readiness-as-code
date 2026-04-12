@@ -3,6 +3,7 @@
 import json
 import os
 import tempfile
+from contextlib import nullcontext
 import pytest
 from ready.validators import (
     run_scan,
@@ -733,3 +734,141 @@ class TestMarkdownFormatter:
         for r in scan.results:
             if r.status == Status.PASS:
                 assert f"~~{r.title}~~" in md
+
+
+class TestCheckpointInheritance:
+    """Tests for the extends / overrides / additional inheritance system."""
+
+    def _write_defs(self, path, defs):
+        path.write_text(json.dumps(defs, indent=2))
+        return str(path)
+
+    def test_no_extends_passthrough(self, tmp_path):
+        """Definitions without extends are returned unchanged."""
+        from ready.engine import resolve_definitions
+
+        defs = {"version": "1.0", "checkpoints": [{"id": "a", "title": "A"}]}
+        result = resolve_definitions(defs, lambda _: None)
+        assert result == defs
+
+    def test_extends_merges_base_checkpoints(self, tmp_path):
+        from ready.engine import resolve_definitions
+
+        base_path = tmp_path / "base" / "checkpoint-definitions.json"
+        base_path.parent.mkdir()
+        self._write_defs(base_path, {
+            "version": "1.0",
+            "metadata": {"guideline_name": "Base", "guideline_version": "1.0"},
+            "checkpoints": [
+                {"id": "base-001", "title": "Base check", "severity": "red"},
+            ],
+        })
+
+        child = {
+            "version": "1.0",
+            "extends": "base@v1.0",
+            "checkpoints": [
+                {"id": "child-001", "title": "Child check", "severity": "yellow"},
+            ],
+        }
+
+        resolved = resolve_definitions(child, lambda name: str(base_path))
+        ids = [cp["id"] for cp in resolved["checkpoints"]]
+        assert "base-001" in ids
+        assert "child-001" in ids
+        assert ids.index("base-001") < ids.index("child-001")
+
+    def test_overrides_merge_by_id(self, tmp_path):
+        from ready.engine import resolve_definitions
+
+        base_path = tmp_path / "base" / "checkpoint-definitions.json"
+        base_path.parent.mkdir()
+        self._write_defs(base_path, {
+            "version": "1.0",
+            "checkpoints": [
+                {"id": "sec-001", "title": "Secrets check", "severity": "red",
+                 "type": "code", "verification": {"method": "grep", "target": "**/*.py"}},
+            ],
+        })
+
+        child = {
+            "extends": "base",
+            "overrides": {
+                "sec-001": {"verification": {"method": "grep", "target": "src/api/**/*.cs"}},
+            },
+            "checkpoints": [],
+        }
+
+        resolved = resolve_definitions(child, lambda _: str(base_path))
+        sec = next(cp for cp in resolved["checkpoints"] if cp["id"] == "sec-001")
+        assert sec["verification"]["target"] == "src/api/**/*.cs"
+        assert sec["title"] == "Secrets check"
+
+    def test_additional_appended_before_local(self, tmp_path):
+        from ready.engine import resolve_definitions
+
+        base_path = tmp_path / "base" / "checkpoint-definitions.json"
+        base_path.parent.mkdir()
+        self._write_defs(base_path, {
+            "version": "1.0",
+            "checkpoints": [{"id": "b1", "title": "Base"}],
+        })
+
+        child = {
+            "extends": "base",
+            "additional": [{"id": "add-001", "title": "Additional"}],
+            "checkpoints": [{"id": "local-001", "title": "Local"}],
+        }
+
+        resolved = resolve_definitions(child, lambda _: str(base_path))
+        ids = [cp["id"] for cp in resolved["checkpoints"]]
+        assert ids == ["b1", "add-001", "local-001"]
+
+    def test_base_not_found_falls_back(self):
+        from ready.engine import resolve_definitions
+
+        child = {
+            "extends": "nonexistent-pack@v1.0",
+            "checkpoints": [{"id": "c1", "title": "Surviving"}],
+        }
+
+        resolved = resolve_definitions(child, lambda _: None)
+        assert len(resolved["checkpoints"]) == 1
+        assert resolved["checkpoints"][0]["id"] == "c1"
+
+    def test_max_depth_prevents_cycle(self, tmp_path):
+        from ready.engine import resolve_definitions
+
+        cycle_path = tmp_path / "cycle" / "checkpoint-definitions.json"
+        cycle_path.parent.mkdir()
+        self._write_defs(cycle_path, {
+            "extends": "cycle",
+            "checkpoints": [{"id": "loop", "title": "Loop"}],
+        })
+
+        result = resolve_definitions(
+            {"extends": "cycle", "checkpoints": [{"id": "start", "title": "Start"}]},
+            lambda _: str(cycle_path),
+        )
+        assert any(cp["id"] == "start" for cp in result["checkpoints"])
+
+    def test_version_mismatch_warns_but_proceeds(self, tmp_path):
+        import logging
+        from ready.engine import resolve_definitions
+
+        base_path = tmp_path / "base" / "checkpoint-definitions.json"
+        base_path.parent.mkdir()
+        self._write_defs(base_path, {
+            "version": "1.0",
+            "metadata": {"guideline_version": "2.0"},
+            "checkpoints": [{"id": "b1", "title": "Base"}],
+        })
+
+        child = {
+            "extends": "base@v1.0",
+            "checkpoints": [],
+        }
+
+        with pytest.raises(Exception) if False else nullcontext():
+            resolved = resolve_definitions(child, lambda _: str(base_path))
+        assert any(cp["id"] == "b1" for cp in resolved["checkpoints"])

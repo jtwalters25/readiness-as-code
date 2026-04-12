@@ -621,6 +621,25 @@ def cmd_scan(args):
             print(f"\n{DIM}Run 'ready doctor' for a full setup check.{RESET}")
             return 1
 
+    # Resolve checkpoint inheritance (extends → base pack + overrides)
+    resolved_definitions = None
+    if os.path.isfile(definitions_path):
+        from ready.engine import resolve_definitions
+
+        with open(definitions_path, "r", encoding="utf-8") as f:
+            raw_defs = json.load(f)
+        if raw_defs.get("extends"):
+            def _find_pack(pack_name: str) -> str | None:
+                examples_dir = _find_examples_dir()
+                if not examples_dir:
+                    return None
+                pack_entry = PACKS.get(pack_name)
+                dirname = pack_entry[0] if pack_entry else pack_name
+                candidate = os.path.join(examples_dir, dirname, DEFINITIONS_FILE)
+                return candidate if os.path.isfile(candidate) else None
+
+            resolved_definitions = resolve_definitions(raw_defs, _find_pack)
+
     show_progress = not getattr(args, "json", False)
 
     def _on_progress(current: int, total: int, title: str) -> None:
@@ -640,6 +659,7 @@ def cmd_scan(args):
             service_tags=service_tags,
             service_name=service_name,
             on_progress=_on_progress,
+            definitions=resolved_definitions,
         )
     except json.JSONDecodeError as e:
         print(f"\r{' ' * 72}\r", end="", flush=True)
