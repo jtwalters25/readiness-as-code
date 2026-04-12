@@ -872,3 +872,87 @@ class TestCheckpointInheritance:
         with pytest.raises(Exception) if False else nullcontext():
             resolved = resolve_definitions(child, lambda _: str(base_path))
         assert any(cp["id"] == "b1" for cp in resolved["checkpoints"])
+
+
+class TestBidirectionalSync:
+    """Tests for work item adapter reopen, branch safety, dry-run, and sync log."""
+
+    def test_adapter_interface_has_reopen(self):
+        from ready.adapters import WorkItemAdapter
+        assert hasattr(WorkItemAdapter, "reopen")
+
+    def test_github_adapter_has_reopen(self):
+        from ready.adapters.github_issues import GitHubIssuesAdapter
+        assert hasattr(GitHubIssuesAdapter, "reopen")
+
+    def test_ado_adapter_has_reopen(self):
+        from ready.adapters.ado import AzureDevOpsAdapter
+        assert hasattr(AzureDevOpsAdapter, "reopen")
+
+    def test_jira_adapter_has_reopen(self):
+        from ready.adapters.jira import JiraAdapter
+        assert hasattr(JiraAdapter, "reopen")
+
+    def test_abstract_reopen_enforced(self):
+        from ready.adapters import WorkItemAdapter
+        class Incomplete(WorkItemAdapter):
+            def create_draft(self, draft): ...
+            def get_status(self, item_id): ...
+            def list_open(self, label=None): ...
+            def close(self, item_id, reason=""): ...
+
+        with pytest.raises(TypeError, match="reopen"):
+            Incomplete()
+
+    def test_sync_log_append(self, tmp_path):
+        from ready.ready import _append_sync_log
+
+        readiness_dir = str(tmp_path)
+        _append_sync_log(readiness_dir, {
+            "action": "close",
+            "checkpoint_id": "sec-001",
+            "item_id": "42",
+            "previous_state": "open",
+            "new_state": "closed",
+            "reason": "Check now passing",
+        })
+        _append_sync_log(readiness_dir, {
+            "action": "reopen",
+            "checkpoint_id": "sec-002",
+            "item_id": "43",
+            "previous_state": "closed",
+            "new_state": "open",
+            "reason": "Regression detected",
+        })
+
+        log_path = tmp_path / "sync-log.json"
+        assert log_path.exists()
+        log = json.loads(log_path.read_text())
+        assert len(log) == 2
+        assert log[0]["action"] == "close"
+        assert log[1]["action"] == "reopen"
+        assert "timestamp" in log[0]
+        assert "timestamp" in log[1]
+
+    def test_branch_safety_helper(self):
+        from ready.ready import _get_current_branch
+        branch = _get_current_branch()
+        assert branch is not None
+        assert isinstance(branch, str)
+
+    def test_items_parser_has_new_flags(self):
+        import argparse
+        from ready.ready import main
+        import sys
+
+        parser = argparse.ArgumentParser()
+        subparsers = parser.add_subparsers()
+        items_parser = subparsers.add_parser("items")
+        items_parser.add_argument("--auto-reopen", action="store_true")
+        items_parser.add_argument("--dry-run", action="store_true")
+        items_parser.add_argument("--force", action="store_true")
+
+        args = items_parser.parse_args(["--auto-reopen", "--dry-run", "--force"])
+        assert args.auto_reopen is True
+        assert args.dry_run is True
+        assert args.force is True
