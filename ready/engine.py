@@ -11,11 +11,15 @@ one new plugin file; this engine does not change.
 """
 
 import json
+import logging
 import os
+import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from enum import Enum
-from typing import Optional
+from typing import Callable, Optional
+
+logger = logging.getLogger("ready")
 
 from ready.plugins.base import Confidence, PluginContext, VerificationPlugin
 from ready.plugins.registry import PluginRegistry, build_default_registry
@@ -287,6 +291,100 @@ def evaluate_checkpoint(
     )
 
 
+def resolve_definitions(
+    definitions: dict,
+    find_pack: Callable[[str], str | None],
+    _depth: int = 0,
+    _max_depth: int = 5,
+) -> dict:
+    """Resolve checkpoint inheritance via the ``extends`` field.
+
+    If the definitions contain ``"extends": "pack-name@version"``, the
+    base pack is loaded via ``find_pack(pack_name)`` which returns a
+    file path (or ``None``). Overrides, additional, and local
+    checkpoints are layered on top.
+
+    Recursion is capped at ``_max_depth`` to prevent cycles.
+    """
+    extends_raw = definitions.get("extends")
+    if not extends_raw:
+        return definitions
+
+    if _depth >= _max_depth:
+        logger.warning(
+            "Checkpoint inheritance depth exceeded (%d). "
+            "Possible cycle — falling back to local definitions.",
+            _max_depth,
+        )
+        return definitions
+
+    # Parse "pack-name@version" → (pack_name, version | None)
+    if "@" in extends_raw:
+        pack_name, declared_version = extends_raw.rsplit("@", 1)
+    else:
+        pack_name = extends_raw
+        declared_version = None
+
+    base_path = find_pack(pack_name)
+    if base_path is None or not os.path.isfile(base_path):
+        logger.error(
+            "Base pack '%s' not found — falling back to local definitions only.",
+            pack_name,
+        )
+        return definitions
+
+    with open(base_path, "r", encoding="utf-8") as f:
+        base_defs = json.load(f)
+
+    # Version mismatch warning
+    if declared_version:
+        base_version = (base_defs.get("metadata") or {}).get(
+            "guideline_version", ""
+        )
+        if base_version and base_version != declared_version:
+            logger.warning(
+                "extends declares version '%s' but base pack '%s' is version '%s'. "
+                "Proceeding with the installed pack.",
+                declared_version,
+                pack_name,
+                base_version,
+            )
+
+    # Recurse in case base pack also extends something
+    base_defs = resolve_definitions(base_defs, find_pack, _depth + 1, _max_depth)
+
+    base_checkpoints = list(base_defs.get("checkpoints", []))
+
+    # Apply overrides — shallow-merge by checkpoint ID
+    overrides = definitions.get("overrides", {})
+    if overrides:
+        for i, cp in enumerate(base_checkpoints):
+            cp_id = cp.get("id", "")
+            if cp_id in overrides:
+                merged = {**cp, **overrides[cp_id]}
+                base_checkpoints[i] = merged
+
+    # Append additional checkpoints
+    additional = definitions.get("additional", [])
+    base_checkpoints.extend(additional)
+
+    # Append local checkpoints
+    local_checkpoints = definitions.get("checkpoints", [])
+    base_checkpoints.extend(local_checkpoints)
+
+    # Build resolved definitions — preserve metadata from base, overlay local
+    resolved = dict(base_defs)
+    resolved["checkpoints"] = base_checkpoints
+    # Carry forward local metadata if present
+    if definitions.get("metadata"):
+        resolved["metadata"] = {
+            **(base_defs.get("metadata") or {}),
+            **definitions["metadata"],
+        }
+
+    return resolved
+
+
 def run_scan(
     repo_root: str,
     definitions_path: str,
@@ -295,11 +393,13 @@ def run_scan(
     service_tags: list[str] | None = None,
     service_name: str | None = None,
     on_progress: "callable | None" = None,
+    definitions: dict | None = None,
 ) -> ScanResult:
     """Run a full scan against a repo and return structured results."""
 
-    with open(definitions_path, "r", encoding="utf-8") as f:
-        definitions = json.load(f)
+    if definitions is None:
+        with open(definitions_path, "r", encoding="utf-8") as f:
+            definitions = json.load(f)
 
     evidence_registry = {"version": "1.0", "attestations": []}
     if evidence_path and os.path.isfile(evidence_path):
