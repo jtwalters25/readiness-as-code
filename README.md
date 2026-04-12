@@ -127,6 +127,18 @@ ready init --list-packs                      # Show all available packs
 | `governance` | 15 | SDLC compliance + sign-off tracking |
 | `service-migration` | 9 | Service identity migration + cutover |
 
+## Proven in Production
+
+ready is based on a system used in enterprise reliability engineering environments, 
+enforcing 80+ readiness checkpoints across real services.
+
+It has been used to:
+- continuously evaluate production readiness across services
+- detect regression before deployment
+- reduce reliance on manual review preparation
+
+This open-source version is the portable, vendor-neutral implementation.
+
 ## Key Capabilities
 
 - **Auto-drift detection.** If a committed baseline exists, every scan shows a delta: `▲ +12%` or `▼ -5%`. No flags, no extra commands.
