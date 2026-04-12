@@ -214,13 +214,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: jtwalters25/readiness-as-code@v0.7.0
+      - uses: jtwalters25/readiness-as-code@v0.7.1
 ```
 
 With options:
 
 ```yaml
-      - uses: jtwalters25/readiness-as-code@v0.7.0
+      - uses: jtwalters25/readiness-as-code@v0.7.1
         with:
           pack: web-service           # auto-init with a checkpoint pack
           fail-on-red: "true"         # fail the build on blocking gaps
@@ -231,7 +231,7 @@ With options:
 Outputs are available for downstream steps:
 
 ```yaml
-      - uses: jtwalters25/readiness-as-code@v0.7.0
+      - uses: jtwalters25/readiness-as-code@v0.7.1
         id: ready
       - run: echo "Readiness: ${{ steps.ready.outputs.readiness-pct }}%"
 ```
