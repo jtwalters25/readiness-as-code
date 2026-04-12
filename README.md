@@ -144,6 +144,43 @@ It has been used to:
 
 This open-source version is the portable, vendor-neutral implementation.
 
+## Detection Accuracy
+
+Checkpoint packs are continuously tested against real-world repository structures to eliminate false negatives and false positives. Results from our benchmark suite against a representative cloud service repo:
+
+### Engineering Review Pack
+
+| Checkpoint | Before | After | Issue Fixed |
+|---|---|---|---|
+| eng-sec-03 Input validation | fail | **pass** | Nested dirs (`src/app/validators/`) now detected |
+| eng-sec-06 SDL gates in CI | fail | **pass** | Microsoft tooling (PoliCheck, BinSkim, Roslyn) recognized |
+| eng-sec-08 Hardcoded secrets | fail | **pass** | Test fixtures excluded via `exclude_paths` |
+| eng-doc-04 OpenAPI spec | fail | **pass** | `docs/openapi.yaml` pattern added |
+
+**Readiness score: 20% &rarr; 36% (+16%)** on the same repo, same code.
+
+### Operational Review Pack
+
+| Checkpoint | Before | After | Issue Fixed |
+|---|---|---|---|
+| ops-oncall-02 Post-mortem template | fail | **pass** | `POST_MORTEM_TEMPLATE.md` case variant detected |
+| ops-data-02 Failure modes | fail | **pass** | `failure_modes.md` underscore variant detected |
+
+**Readiness score: 64% &rarr; 79% (+14%)** on the same repo, same code.
+
+### False Positive Reduction
+
+Secrets detection (`eng-sec-08`) previously flagged test fixtures as real secrets:
+
+```
+BEFORE: fail — 2 false positives
+  tests/test_auth.py:2  mock_token = "fake-token-1234567890"
+  tests/test_auth.py:3  api_key = "test-api-key-for-unit-tests"
+
+AFTER: pass — 0 false positives
+  Test directories excluded. Production code still scanned.
+```
+
 ## Key Capabilities
 
 - **Auto-drift detection.** If a committed baseline exists, every scan shows a delta: `▲ +12%` or `▼ -5%`. No flags, no extra commands.
