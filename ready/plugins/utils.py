@@ -25,18 +25,50 @@ def is_skipped(path: str) -> bool:
     return any(part in SKIP_DIRS for part in Path(path).parts)
 
 
+def _split_top_level(pattern: str) -> list[str]:
+    """Split a pattern on commas that are outside brace groups."""
+    parts: list[str] = []
+    depth = 0
+    current: list[str] = []
+    for ch in pattern:
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            parts.append("".join(current).strip())
+            current = []
+            continue
+        current.append(ch)
+    parts.append("".join(current).strip())
+    return [p for p in parts if p]
+
+
 def resolve_glob(pattern: str, repo_root: str) -> list[str]:
     """Resolve a glob pattern against the repo with brace expansion.
 
-    Automatically filters out dependency and tooling directories.
+    Supports comma-separated patterns at the top level and brace
+    expansion inside patterns. Automatically filters out dependency
+    and tooling directories.
     """
+    top_parts = _split_top_level(pattern)
+    if len(top_parts) > 1:
+        results: list[str] = []
+        seen: set[str] = set()
+        for part in top_parts:
+            for m in resolve_glob(part, repo_root):
+                if m not in seen:
+                    seen.add(m)
+                    results.append(m)
+        return results
+
     if "{" in pattern and "}" in pattern:
         brace_match = re.search(r"\{([^}]+)\}", pattern)
         if brace_match:
             alternatives = brace_match.group(1).split(",")
             prefix = pattern[: brace_match.start()]
             suffix = pattern[brace_match.end() :]
-            results: list[str] = []
+            results = []
             for alt in alternatives:
                 expanded = prefix + alt.strip() + suffix
                 results.extend(resolve_glob(expanded, repo_root))
