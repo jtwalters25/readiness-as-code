@@ -15,3 +15,4 @@ venv/
 author-prompt.md
 node_modules/
 */node_modules/
+/docs/presentation
