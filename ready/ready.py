@@ -36,6 +36,11 @@ Usage:
     ready health                   Analyze checkpoint health — chronic failures, flapping, MTTR
     ready predict                  Predict readiness trajectory, flag at-risk checks
     ready predict --days 14        Forecast horizon (default: 7 days)
+    ready scorecard                Executive scorecard (predict + dashboard + trends)
+    ready scorecard --open         Generate and open in browser
+    ready scorecard --days 14      Custom forecast horizon
+    ready leaderboard PATHS...     Cross-repo ranked leaderboard from baselines
+    ready leaderboard PATHS... --html  HTML leaderboard
     ready dashboard                Generate self-contained HTML readiness dashboard
     ready dashboard --open         Generate and open in browser
     ready aggregate PATHS...       Cross-repo heatmap (CLI)
@@ -1819,6 +1824,133 @@ def cmd_audit(args):
     return 1 if has_critical else 0
 
 
+def cmd_scorecard(args) -> int:
+    """Generate a one-page executive scorecard."""
+    import webbrowser
+    from ready.analytics import load_history
+    from ready.formatters.scorecard import generate_scorecard
+
+    repo_root = find_repo_root()
+    readiness_dir = os.path.join(repo_root, READINESS_DIR)
+    definitions_path = os.path.join(readiness_dir, DEFINITIONS_FILE)
+    exceptions_path = os.path.join(readiness_dir, EXCEPTIONS_FILE)
+
+    auto_pack = None
+    if not os.path.isdir(readiness_dir):
+        auto_pack = _detect_pack(repo_root)
+        examples_dir = _find_examples_dir()
+        if not examples_dir:
+            print(f"{RED}✗ No {READINESS_DIR}/ found. Run 'ready init' first.{RESET}")
+            return 1
+        pack_dir_name = PACKS[auto_pack][0]
+        definitions_path = os.path.join(examples_dir, pack_dir_name, "checkpoint-definitions.json")
+
+    if not os.path.isfile(definitions_path):
+        print(f"{RED}✗ No {DEFINITIONS_FILE} found in {READINESS_DIR}/{RESET}")
+        return 1
+
+    config_path = os.path.join(readiness_dir, "config.json")
+    service_name = None
+    service_tags = None
+    if os.path.isfile(config_path):
+        with open(config_path) as f:
+            cfg = json.load(f)
+            service_name = cfg.get("service_name")
+            service_tags = cfg.get("service_tags")
+
+    result = run_scan(
+        definitions_path=definitions_path,
+        evidence_path=os.path.join(readiness_dir, EVIDENCE_FILE),
+        exceptions_path=exceptions_path,
+        repo_root=repo_root,
+        service_name=service_name,
+        service_tags=service_tags,
+    )
+
+    scan_dict = result.to_dict()
+    history = load_history(readiness_dir)
+    horizon = getattr(args, "days", 7)
+
+    html = generate_scorecard(
+        scan_dict,
+        history,
+        service_name=result.service_name,
+        horizon_days=horizon,
+    )
+
+    output_path = args.output
+    if not os.path.isabs(output_path):
+        output_path = os.path.join(repo_root, output_path)
+
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(html)
+
+    print(f"{GREEN}✓{RESET} Scorecard written to {output_path}")
+
+    if args.open:
+        webbrowser.open(f"file://{os.path.abspath(output_path)}")
+
+    return 0
+
+
+def cmd_leaderboard(args) -> int:
+    """Generate a cross-repo leaderboard from baseline files."""
+    import webbrowser
+
+    if not args.paths:
+        print(f"{RED}Provide paths to baseline files.{RESET}")
+        return 1
+
+    baselines = []
+    for path in args.paths:
+        if os.path.isfile(path):
+            with open(path) as f:
+                baselines.append(json.load(f))
+
+    if not baselines:
+        print(f"{RED}No valid baseline files found.{RESET}")
+        return 1
+
+    # Terminal output
+    baselines_sorted = sorted(baselines, key=lambda b: -b.get("summary", {}).get("readiness_pct", 0))
+    total = len(baselines_sorted)
+    avg = round(sum(b.get("summary", {}).get("readiness_pct", 0) for b in baselines_sorted) / total)
+    ready_count = sum(1 for b in baselines_sorted if b.get("summary", {}).get("failing_red", 1) == 0)
+
+    print(f"\n{BOLD}Readiness Leaderboard{RESET}")
+    print(f"{DIM}{total} services · avg {avg}% · {ready_count} ready{RESET}\n")
+
+    for rank, b in enumerate(baselines_sorted, 1):
+        name = b.get("service_name", "unknown")
+        s = b.get("summary", {})
+        pct = s.get("readiness_pct", 0)
+        red = s.get("failing_red", 0)
+        color = GREEN if pct >= 90 else YELLOW if pct >= 70 else RED
+        bar_len = int(pct / 100 * 30)
+        bar = f"{color}{'█' * bar_len}{'░' * (30 - bar_len)}{RESET}"
+        status = f"{GREEN}✓{RESET}" if red == 0 else f"{RED}✗ {red} blocking{RESET}"
+        medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, f"  {rank}.")
+        print(f"  {medal} {bar}  {color}{pct:5.1f}%{RESET}  {name:<24} {status}")
+
+    print()
+
+    # HTML output
+    if getattr(args, "html", False):
+        from ready.formatters.leaderboard import generate_leaderboard_html
+        html = generate_leaderboard_html(baselines)
+
+        output_path = getattr(args, "html_output", "readiness-leaderboard.html")
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(html)
+        print(f"{GREEN}✓ Leaderboard written to {output_path}{RESET}")
+
+        if getattr(args, "open", False):
+            webbrowser.open(f"file://{os.path.abspath(output_path)}")
+
+    return 0
+
+
 def cmd_dashboard(args) -> int:
     """Generate a self-contained HTML readiness dashboard."""
     import webbrowser
@@ -2845,6 +2977,21 @@ def main():
     predict_parser = subparsers.add_parser("predict", help="Predict readiness trajectory and flag at-risk checkpoints")
     predict_parser.add_argument("--days", type=int, default=7, metavar="N", help="Forecast horizon in days (default: 7)")
 
+    # scorecard
+    sc_parser = subparsers.add_parser("scorecard", help="Generate one-page executive scorecard (predict + dashboard + trends)")
+    sc_parser.add_argument("--output", "-o", default="readiness-scorecard.html", metavar="FILE",
+                           help="Output file (default: readiness-scorecard.html)")
+    sc_parser.add_argument("--days", type=int, default=7, metavar="N", help="Forecast horizon in days (default: 7)")
+    sc_parser.add_argument("--open", action="store_true", help="Open in browser after generation")
+
+    # leaderboard
+    lb_parser = subparsers.add_parser("leaderboard", help="Cross-repo ranked leaderboard from baselines")
+    lb_parser.add_argument("paths", nargs="*", help="Paths to baseline files")
+    lb_parser.add_argument("--html", action="store_true", help="Generate self-contained HTML leaderboard")
+    lb_parser.add_argument("--html-output", dest="html_output", default="readiness-leaderboard.html",
+                           metavar="FILE", help="Output file for HTML leaderboard")
+    lb_parser.add_argument("--open", action="store_true", help="Open HTML in browser")
+
     # dashboard
     dash_parser = subparsers.add_parser("dashboard", help="Generate self-contained HTML readiness dashboard")
     dash_parser.add_argument("--output", "-o", default="readiness-dashboard.html", metavar="FILE",
@@ -2906,6 +3053,10 @@ def main():
     elif args.command == "predict":
         from ready.analytics import cmd_predict
         sys.exit(cmd_predict(args))
+    elif args.command == "scorecard":
+        sys.exit(cmd_scorecard(args))
+    elif args.command == "leaderboard":
+        sys.exit(cmd_leaderboard(args))
     elif args.command == "dashboard":
         sys.exit(cmd_dashboard(args))
     else:

@@ -185,6 +185,8 @@ AFTER: pass — 0 false positives
 
 - **Auto-drift detection.** If a committed baseline exists, every scan shows a delta: `▲ +12%` or `▼ -5%`. No flags, no extra commands.
 - **Closed-loop work item tracking.** Gaps become tracked work items (GitHub, Azure DevOps, Jira); ticket-closed-but-code-failing flags as **regression**, code-fixed-but-ticket-open as **stale**.
+- **Executive scorecard.** `ready scorecard` generates a one-page HTML summary — score ring, forecast, blocking gaps, regression risk, chronic blockers, MTTR. The artifact you forward to leadership or project into a review.
+- **Cross-repo leaderboard.** `ready leaderboard` ranks services by readiness score with medals, bar charts, and ready/not-ready status. Gamification drives adoption without mandates.
 - **Cross-repo aggregation.** `ready aggregate` turns multiple baselines into an HTML heatmap — *"telemetry gaps in 4 of 5 services"* is a platform problem, not a team problem.
 - **Expiring accepted risks.** Acknowledge a gap with a justification and expiry date; the scanner re-flags it when the expiry passes.
 - **Predictive readiness.** `ready predict` forecasts your score trajectory, flags regression-risk checkpoints (currently passing but historically flapping), identifies chronic blockers, and spots stale-green checks that may need tightening. Pure math on scan history — no AI API needed.
@@ -246,12 +248,16 @@ ready trends --last 50                 # Show last 50 scans
 ready health                           # Chronic failures, flapping, MTTR analysis
 ready predict                          # Forecast trajectory, flag at-risk checks
 ready predict --days 14                # Custom forecast horizon
+ready scorecard                        # Executive scorecard (predict + trends + gaps)
+ready scorecard --open                 # Generate and open in browser
 ready dashboard                        # Self-contained HTML readiness dashboard
 ready dashboard --open                 # Generate and open in browser
 ready watch                            # Watch for changes and re-scan continuously
 ready watch --interval 5               # Custom poll interval (seconds)
 
 # Cross-repo
+ready leaderboard PATHS...             # Cross-repo ranked leaderboard
+ready leaderboard PATHS... --html      # HTML leaderboard with medals
 ready aggregate PATHS...               # Cross-repo heatmap from multiple baselines
 ready aggregate PATHS... --html        # Generate self-contained HTML heatmap report
 ```

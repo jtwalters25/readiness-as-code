@@ -1281,3 +1281,73 @@ class TestFixContext:
         filtered = [r for r in failing if r.checkpoint_id == "cp-a"]
         assert len(filtered) == 1
         assert filtered[0].checkpoint_id == "cp-a"
+
+
+class TestScorecard:
+    """Tests for executive scorecard HTML generation."""
+
+    def test_scorecard_basic(self):
+        from ready.formatters.scorecard import generate_scorecard
+
+        scan = {
+            "summary": {"total": 10, "passing": 7, "failing_red": 2,
+                        "failing_yellow": 1, "exceptions": 0, "skipped": 0,
+                        "readiness_pct": 70.0},
+            "results": [
+                {"checkpoint_id": "cp-1", "title": "Blocker", "status": "fail",
+                 "severity": "red", "fix_hint": "Fix it"},
+            ],
+        }
+        html = generate_scorecard(scan, [], service_name="test-svc")
+        assert "<!DOCTYPE html>" in html
+        assert "test-svc" in html
+        assert "70%" in html
+        assert "BLOCKING" in html
+
+    def test_scorecard_with_forecast(self):
+        from ready.formatters.scorecard import generate_scorecard
+
+        history = [
+            {"timestamp": f"2026-04-{10+i:02d}T00:00:00+00:00", "readiness_pct": 90 - i * 3,
+             "checkpoints": {"cp": {"status": "pass", "severity": "yellow"}}}
+            for i in range(5)
+        ]
+        scan = {
+            "summary": {"total": 5, "passing": 4, "failing_red": 1,
+                        "failing_yellow": 0, "exceptions": 0, "skipped": 0,
+                        "readiness_pct": 78.0},
+            "results": [],
+        }
+        html = generate_scorecard(scan, history, service_name="forecast-svc", horizon_days=7)
+        assert "forecast-svc" in html
+        assert "/day" in html
+        assert "<svg" in html
+
+
+class TestLeaderboard:
+    """Tests for cross-repo leaderboard."""
+
+    def test_leaderboard_html(self):
+        from ready.formatters.leaderboard import generate_leaderboard_html
+
+        baselines = [
+            {"service_name": "svc-a", "summary": {"readiness_pct": 95, "passing": 10, "failing_red": 0, "failing_yellow": 1, "total": 11}},
+            {"service_name": "svc-b", "summary": {"readiness_pct": 60, "passing": 6, "failing_red": 2, "failing_yellow": 2, "total": 10}},
+            {"service_name": "svc-c", "summary": {"readiness_pct": 80, "passing": 8, "failing_red": 0, "failing_yellow": 2, "total": 10}},
+        ]
+        html = generate_leaderboard_html(baselines)
+        assert "<!DOCTYPE html>" in html
+        assert "svc-a" in html
+        assert "svc-b" in html
+        assert "Leaderboard" in html
+        assert html.index("svc-a") < html.index("svc-c") < html.index("svc-b")
+
+    def test_leaderboard_ranking(self):
+        from ready.formatters.leaderboard import generate_leaderboard_html
+
+        baselines = [
+            {"service_name": "zeta-payments", "summary": {"readiness_pct": 30, "passing": 3, "failing_red": 4, "failing_yellow": 3, "total": 10}},
+            {"service_name": "alpha-gateway", "summary": {"readiness_pct": 100, "passing": 10, "failing_red": 0, "failing_yellow": 0, "total": 10}},
+        ]
+        html = generate_leaderboard_html(baselines)
+        assert html.index("alpha-gateway") < html.index("zeta-payments")
