@@ -189,6 +189,7 @@ AFTER: pass — 0 false positives
 - **Expiring accepted risks.** Acknowledge a gap with a justification and expiry date; the scanner re-flags it when the expiry passes.
 - **HTML dashboard.** `ready dashboard` generates a self-contained HTML dashboard — score ring, sparkline trajectory, blocking gaps, flapping checks, MTTR leaderboard. One file, no dependencies, dark theme.
 - **Readiness audit.** `ready audit` reports the health of the readiness system itself — exception age, definition staleness, review_by coverage, score trend.
+- **AI-tool remediation context.** `ready scan --fix-context` outputs structured remediation prompts for every failing check — pipe directly to `claude`, `gh copilot suggest`, or any LLM. The scanner provides the context, your AI tool writes the fix.
 - **Codebase-aware inference.** `ready infer` analyzes stack, frameworks, dependencies, ADRs, and auth patterns to propose tailored checkpoints you approve one at a time.
 - **AI-assisted authoring.** `ready author --from guidelines.md` generates a paste-ready prompt for any model (Claude, ChatGPT, Copilot, Cursor, Gemini).
 - **README badge.** `ready badge` generates a shields.io badge from the committed score.
@@ -213,6 +214,9 @@ ready scan --calibrate                 # Report-only (no exit code failure)
 ready scan --json                      # Machine-readable output
 ready scan --baseline FILE             # Write baseline snapshot (enables drift tracking)
 ready scan --suggest-tuning            # Show pattern tuning suggestions after scan
+ready scan --fix-context               # Output remediation context for AI tools
+ready scan --fix-context | claude      # Pipe to Claude CLI for auto-fix
+ready scan --fix-context --checkpoint ID  # Fix context for one checkpoint
 
 # Setup
 ready init                             # Scaffold .readiness/ with starter pack

@@ -1142,3 +1142,82 @@ class TestDashboard:
         html = generate_dashboard(scan_result, [], service_name="perfect-svc")
         assert "Ready" in html
         assert "Ship it" in html
+
+
+class TestFixContext:
+    """Tests for --fix-context remediation output."""
+
+    def test_scan_parser_has_fix_context_flag(self):
+        from ready.ready import main
+        import argparse
+        parser = argparse.ArgumentParser()
+        subparsers = parser.add_subparsers(dest="command")
+        scan_parser = subparsers.add_parser("scan")
+        scan_parser.add_argument("--fix-context", dest="fix_context", action="store_true")
+        scan_parser.add_argument("--checkpoint", type=str)
+        args = parser.parse_args(["scan", "--fix-context", "--checkpoint", "gen-001"])
+        assert args.fix_context is True
+        assert args.checkpoint == "gen-001"
+
+    def test_fix_context_output_format(self, tmp_path, capsys):
+        import json
+        from ready.engine import run_scan
+
+        defs = {
+            "version": "1.0",
+            "checkpoints": [{
+                "id": "test-001",
+                "title": "README exists",
+                "description": "Must have a README.",
+                "severity": "red",
+                "type": "code",
+                "guideline": "Test",
+                "guideline_section": "1.1",
+                "verification": {"method": "glob", "pattern": "README.md", "min_matches": 1},
+                "fix_hint": "Create a README.md file.",
+                "doc_link": "https://example.com",
+            }],
+        }
+        defs_path = tmp_path / "checkpoint-definitions.json"
+        defs_path.write_text(json.dumps(defs))
+
+        result = run_scan(
+            repo_root=str(tmp_path),
+            definitions_path=str(defs_path),
+        )
+
+        failing = [r for r in result.results if r.status.value == "fail"]
+        assert len(failing) == 1
+
+        defs_by_id = {cp["id"]: cp for cp in defs["checkpoints"]}
+        r = failing[0]
+        defn = defs_by_id[r.checkpoint_id]
+
+        assert r.checkpoint_id == "test-001"
+        assert defn["fix_hint"] == "Create a README.md file."
+        assert defn["verification"]["method"] == "glob"
+        assert defn["verification"]["pattern"] == "README.md"
+
+    def test_fix_context_filter_by_checkpoint(self, tmp_path):
+        import json
+        from ready.engine import run_scan
+
+        defs = {
+            "version": "1.0",
+            "checkpoints": [
+                {"id": "cp-a", "title": "A", "severity": "red", "type": "code",
+                 "guideline": "T", "guideline_section": "1",
+                 "verification": {"method": "glob", "pattern": "A.md", "min_matches": 1}},
+                {"id": "cp-b", "title": "B", "severity": "red", "type": "code",
+                 "guideline": "T", "guideline_section": "2",
+                 "verification": {"method": "glob", "pattern": "B.md", "min_matches": 1}},
+            ],
+        }
+        defs_path = tmp_path / "checkpoint-definitions.json"
+        defs_path.write_text(json.dumps(defs))
+
+        result = run_scan(repo_root=str(tmp_path), definitions_path=str(defs_path))
+        failing = [r for r in result.results if r.status.value == "fail"]
+        filtered = [r for r in failing if r.checkpoint_id == "cp-a"]
+        assert len(filtered) == 1
+        assert filtered[0].checkpoint_id == "cp-a"

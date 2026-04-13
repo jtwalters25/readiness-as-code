@@ -10,6 +10,8 @@ Usage:
     ready scan --baseline FILE     Write baseline snapshot
     ready scan --markdown FILE     Write a markdown gaps checklist to FILE
     ready scan --suggest-tuning    Show checkpoint tuning suggestions after scan
+    ready scan --fix-context       Output remediation context (pipe to claude, copilot, etc.)
+    ready scan --fix-context --checkpoint ID  Fix context for a single checkpoint
     ready doctor                   Diagnose setup — validate config, JSON files, CI, adapters
     ready init                     Scaffold .readiness/ directory
     ready init --pack NAME         Use a specific checkpoint pack
@@ -733,6 +735,63 @@ def cmd_scan(args):
             f.write(markdown_content)
         if not getattr(args, "json", False):
             print(f"📄 Markdown report written to {markdown_path}")
+
+    # Fix context — structured remediation prompts for AI tools
+    if getattr(args, "fix_context", False):
+        try:
+            with open(definitions_path, "r", encoding="utf-8") as f:
+                all_defs = json.load(f)
+        except Exception:
+            all_defs = {}
+        defs_by_id = {cp["id"]: cp for cp in all_defs.get("checkpoints", [])}
+
+        failing = [r for r in result.results
+                   if r.status.value in ("fail", "expired_exception")]
+        cp_filter = getattr(args, "checkpoint", None)
+        if cp_filter:
+            failing = [r for r in failing if r.checkpoint_id == cp_filter]
+
+        if not failing:
+            print("No failing checkpoints to fix.", file=sys.stderr)
+            return 0
+
+        blocks = []
+        for r in failing:
+            defn = defs_by_id.get(r.checkpoint_id, {})
+            verification = defn.get("verification", {})
+            severity_tag = "BLOCKING" if r.severity.value == "red" else "WARNING"
+
+            block = f"## [{severity_tag}] {r.checkpoint_id}: {r.title}\n"
+            if defn.get("description"):
+                block += f"\n{defn['description']}\n"
+            block += f"\nSeverity: {r.severity.value}"
+            block += f"\nSection: {r.guideline_section}" if r.guideline_section else ""
+            if r.fix_hint:
+                block += f"\nFix: {r.fix_hint}"
+            if r.evidence:
+                block += f"\nEvidence: {', '.join(r.evidence[:5])}"
+            if verification:
+                method = verification.get("method", "")
+                if method in ("glob", "glob_all"):
+                    block += f"\nExpected files matching: {verification.get('pattern', '')}"
+                elif method in ("grep", "grep_all"):
+                    block += f"\nExpected pattern in code: {verification.get('pattern', '')}"
+                    if verification.get("target"):
+                        block += f"\nSearch target: {verification['target']}"
+                if verification.get("pass_condition") == "absent":
+                    block += "\nPass condition: pattern must NOT be found"
+            if r.doc_link:
+                block += f"\nReference: {r.doc_link}"
+            blocks.append(block)
+
+        header = f"# Readiness Fixes — {result.service_name}\n"
+        header += f"\n{len(failing)} failing checkpoint(s) need remediation.\n"
+        header += f"Repository root: {repo_root}\n"
+        header += "\nFor each checkpoint below, generate the fix — create missing files,\n"
+        header += "add missing configuration, or update existing code as needed.\n"
+        print(header)
+        print("\n---\n".join(blocks))
+        return 0
 
     # JSON output (early return — machine consumers get stable format)
     if args.json:
@@ -2672,6 +2731,18 @@ def main():
         dest="suggest_tuning",
         action="store_true",
         help="Show checkpoint tuning suggestions after scan results",
+    )
+    scan_parser.add_argument(
+        "--fix-context",
+        dest="fix_context",
+        action="store_true",
+        help="Output structured remediation context for failing checks (pipe to claude, gh copilot, etc.)",
+    )
+    scan_parser.add_argument(
+        "--checkpoint",
+        type=str,
+        metavar="ID",
+        help="Filter --fix-context to a single checkpoint ID",
     )
 
     # author
