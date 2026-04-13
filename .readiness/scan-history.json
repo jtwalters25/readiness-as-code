@@ -1,0 +1,194 @@
+[
+  {
+    "timestamp": "2026-04-13T03:34:51.497123+00:00",
+    "branch": "main",
+    "trigger": "local",
+    "service_name": "readiness-as-code",
+    "readiness_pct": 100.0,
+    "passing": 8,
+    "failing_red": 0,
+    "failing_yellow": 0,
+    "exceptions": 0,
+    "skipped": 4,
+    "total": 12,
+    "duration_ms": 375,
+    "checkpoints": {
+      "gen-001": {
+        "status": "pass",
+        "severity": "red"
+      },
+      "gen-002": {
+        "status": "pass",
+        "severity": "yellow"
+      },
+      "gen-003": {
+        "status": "pass",
+        "severity": "red"
+      },
+      "gen-004": {
+        "status": "pass",
+        "severity": "red"
+      },
+      "gen-005": {
+        "status": "pass",
+        "severity": "yellow"
+      },
+      "gen-006": {
+        "status": "pass",
+        "severity": "red"
+      },
+      "gen-007": {
+        "status": "pass",
+        "severity": "yellow"
+      },
+      "sec-001": {
+        "status": "pass",
+        "severity": "yellow"
+      },
+      "ops-001": {
+        "status": "skip",
+        "severity": "red"
+      },
+      "ops-002": {
+        "status": "skip",
+        "severity": "yellow"
+      },
+      "ext-001": {
+        "status": "skip",
+        "severity": "red"
+      },
+      "ext-002": {
+        "status": "skip",
+        "severity": "red"
+      }
+    }
+  },
+  {
+    "timestamp": "2026-04-13T03:44:20.472525+00:00",
+    "branch": "main",
+    "trigger": "local",
+    "service_name": "readiness-as-code",
+    "readiness_pct": 100.0,
+    "passing": 8,
+    "failing_red": 0,
+    "failing_yellow": 0,
+    "exceptions": 0,
+    "skipped": 4,
+    "total": 12,
+    "duration_ms": 400,
+    "checkpoints": {
+      "gen-001": {
+        "status": "pass",
+        "severity": "red"
+      },
+      "gen-002": {
+        "status": "pass",
+        "severity": "yellow"
+      },
+      "gen-003": {
+        "status": "pass",
+        "severity": "red"
+      },
+      "gen-004": {
+        "status": "pass",
+        "severity": "red"
+      },
+      "gen-005": {
+        "status": "pass",
+        "severity": "yellow"
+      },
+      "gen-006": {
+        "status": "pass",
+        "severity": "red"
+      },
+      "gen-007": {
+        "status": "pass",
+        "severity": "yellow"
+      },
+      "sec-001": {
+        "status": "pass",
+        "severity": "yellow"
+      },
+      "ops-001": {
+        "status": "skip",
+        "severity": "red"
+      },
+      "ops-002": {
+        "status": "skip",
+        "severity": "yellow"
+      },
+      "ext-001": {
+        "status": "skip",
+        "severity": "red"
+      },
+      "ext-002": {
+        "status": "skip",
+        "severity": "red"
+      }
+    }
+  },
+  {
+    "timestamp": "2026-04-13T03:44:20.883345+00:00",
+    "branch": "main",
+    "trigger": "local",
+    "service_name": "readiness-as-code",
+    "readiness_pct": 100.0,
+    "passing": 8,
+    "failing_red": 0,
+    "failing_yellow": 0,
+    "exceptions": 0,
+    "skipped": 4,
+    "total": 12,
+    "duration_ms": 340,
+    "checkpoints": {
+      "gen-001": {
+        "status": "pass",
+        "severity": "red"
+      },
+      "gen-002": {
+        "status": "pass",
+        "severity": "yellow"
+      },
+      "gen-003": {
+        "status": "pass",
+        "severity": "red"
+      },
+      "gen-004": {
+        "status": "pass",
+        "severity": "red"
+      },
+      "gen-005": {
+        "status": "pass",
+        "severity": "yellow"
+      },
+      "gen-006": {
+        "status": "pass",
+        "severity": "red"
+      },
+      "gen-007": {
+        "status": "pass",
+        "severity": "yellow"
+      },
+      "sec-001": {
+        "status": "pass",
+        "severity": "yellow"
+      },
+      "ops-001": {
+        "status": "skip",
+        "severity": "red"
+      },
+      "ops-002": {
+        "status": "skip",
+        "severity": "yellow"
+      },
+      "ext-001": {
+        "status": "skip",
+        "severity": "red"
+      },
+      "ext-002": {
+        "status": "skip",
+        "severity": "red"
+      }
+    }
+  }
+]
