@@ -34,6 +34,8 @@ Usage:
     ready trends                   Show readiness score trends from scan history
     ready trends --last 50         Show last 50 scans
     ready health                   Analyze checkpoint health — chronic failures, flapping, MTTR
+    ready predict                  Predict readiness trajectory, flag at-risk checks
+    ready predict --days 14        Forecast horizon (default: 7 days)
     ready dashboard                Generate self-contained HTML readiness dashboard
     ready dashboard --open         Generate and open in browser
     ready aggregate PATHS...       Cross-repo heatmap (CLI)
@@ -2839,6 +2841,10 @@ def main():
     # health
     subparsers.add_parser("health", help="Analyze checkpoint health — chronic failures, flapping, MTTR")
 
+    # predict
+    predict_parser = subparsers.add_parser("predict", help="Predict readiness trajectory and flag at-risk checkpoints")
+    predict_parser.add_argument("--days", type=int, default=7, metavar="N", help="Forecast horizon in days (default: 7)")
+
     # dashboard
     dash_parser = subparsers.add_parser("dashboard", help="Generate self-contained HTML readiness dashboard")
     dash_parser.add_argument("--output", "-o", default="readiness-dashboard.html", metavar="FILE",
@@ -2897,6 +2903,9 @@ def main():
     elif args.command == "health":
         from ready.analytics import cmd_health
         sys.exit(cmd_health(args))
+    elif args.command == "predict":
+        from ready.analytics import cmd_predict
+        sys.exit(cmd_predict(args))
     elif args.command == "dashboard":
         sys.exit(cmd_dashboard(args))
     else:

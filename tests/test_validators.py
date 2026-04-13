@@ -1083,6 +1083,66 @@ class TestAnalytics:
         assert _format_duration(172800) == "2.0d"
 
 
+class TestPredict:
+    """Tests for predictive readiness scoring."""
+
+    def _run_predict(self, history, days=7):
+        from ready.analytics import cmd_predict
+        import argparse, unittest.mock as mock, io, contextlib
+
+        args = argparse.Namespace(days=days)
+        with mock.patch("ready.ready.find_repo_root", return_value="/tmp"), \
+             mock.patch("ready.analytics.load_history", return_value=history):
+            f = io.StringIO()
+            with contextlib.redirect_stdout(f):
+                result = cmd_predict(args)
+            return result, f.getvalue()
+
+    def test_predict_needs_minimum_scans(self):
+        history = [
+            {"timestamp": "2026-04-10T00:00:00+00:00", "readiness_pct": 80, "checkpoints": {}},
+        ]
+        result, output = self._run_predict(history)
+        assert "Need at least 3 scans" in output
+        assert result == 0
+
+    def test_predict_detects_regression_risk(self):
+        history = [
+            {"timestamp": f"2026-04-{10+i:02d}T00:00:00+00:00", "readiness_pct": 70 + i,
+             "checkpoints": {
+                 "flappy": {"status": "fail" if i % 2 == 0 else "pass", "severity": "red"},
+                 "stable": {"status": "pass", "severity": "yellow"},
+             }}
+            for i in range(6)
+        ]
+        history[-1]["checkpoints"]["flappy"]["status"] = "pass"
+
+        _, output = self._run_predict(history)
+        assert "flappy" in output
+        assert "flip" in output.lower()
+
+    def test_predict_detects_chronic_blockers(self):
+        history = [
+            {"timestamp": f"2026-04-{10+i:02d}T00:00:00+00:00", "readiness_pct": 50,
+             "checkpoints": {
+                 "chronic-fail": {"status": "fail", "severity": "red"},
+             }}
+            for i in range(5)
+        ]
+        _, output = self._run_predict(history)
+        assert "chronic-fail" in output
+
+    def test_predict_drift_velocity(self):
+        history = [
+            {"timestamp": f"2026-04-{10+i:02d}T00:00:00+00:00",
+             "readiness_pct": 90 - (i * 5),
+             "checkpoints": {"cp": {"status": "pass", "severity": "yellow"}}}
+            for i in range(5)
+        ]
+        _, output = self._run_predict(history)
+        assert "▼" in output
+
+
 class TestDashboard:
     """Tests for HTML dashboard generation."""
 

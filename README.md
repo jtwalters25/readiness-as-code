@@ -187,6 +187,7 @@ AFTER: pass — 0 false positives
 - **Closed-loop work item tracking.** Gaps become tracked work items (GitHub, Azure DevOps, Jira); ticket-closed-but-code-failing flags as **regression**, code-fixed-but-ticket-open as **stale**.
 - **Cross-repo aggregation.** `ready aggregate` turns multiple baselines into an HTML heatmap — *"telemetry gaps in 4 of 5 services"* is a platform problem, not a team problem.
 - **Expiring accepted risks.** Acknowledge a gap with a justification and expiry date; the scanner re-flags it when the expiry passes.
+- **Predictive readiness.** `ready predict` forecasts your score trajectory, flags regression-risk checkpoints (currently passing but historically flapping), identifies chronic blockers, and spots stale-green checks that may need tightening. Pure math on scan history — no AI API needed.
 - **HTML dashboard.** `ready dashboard` generates a self-contained HTML dashboard — score ring, sparkline trajectory, blocking gaps, flapping checks, MTTR leaderboard. One file, no dependencies, dark theme.
 - **Readiness audit.** `ready audit` reports the health of the readiness system itself — exception age, definition staleness, review_by coverage, score trend.
 - **AI-tool remediation context.** `ready scan --fix-context` outputs structured remediation prompts for every failing check — pipe directly to `claude`, `gh copilot suggest`, or any LLM. The scanner provides the context, your AI tool writes the fix.
@@ -243,6 +244,8 @@ ready items --verify --dry-run         # Preview without API calls
 ready trends                           # Score timeline from scan history
 ready trends --last 50                 # Show last 50 scans
 ready health                           # Chronic failures, flapping, MTTR analysis
+ready predict                          # Forecast trajectory, flag at-risk checks
+ready predict --days 14                # Custom forecast horizon
 ready dashboard                        # Self-contained HTML readiness dashboard
 ready dashboard --open                 # Generate and open in browser
 ready watch                            # Watch for changes and re-scan continuously

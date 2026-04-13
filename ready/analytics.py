@@ -270,6 +270,139 @@ def cmd_health(args) -> int:
     return 0
 
 
+def cmd_predict(args) -> int:
+    """Predict readiness trajectory and flag at-risk checkpoints."""
+    from ready.ready import find_repo_root, READINESS_DIR
+
+    repo_root = find_repo_root()
+    readiness_dir = os.path.join(repo_root, READINESS_DIR)
+    history = load_history(readiness_dir)
+
+    if len(history) < 3:
+        print(f"{YELLOW}Need at least 3 scans for predictions. Run 'ready scan' a few more times.{RESET}")
+        return 0
+
+    horizon_days = getattr(args, "days", 7)
+
+    print(f"\n{BOLD}Readiness Forecast{RESET}")
+    print(f"{DIM}Based on {len(history)} scans, projecting {horizon_days} days{RESET}\n")
+
+    # --- 1. Drift velocity: linear regression on recent scores ---
+    recent = history[-20:]
+    timestamps = []
+    scores = []
+    for event in recent:
+        try:
+            ts = datetime.datetime.fromisoformat(event["timestamp"])
+            timestamps.append(ts.timestamp())
+            scores.append(event.get("readiness_pct", 0))
+        except (ValueError, KeyError):
+            pass
+
+    drift_per_day = 0.0
+    projected_score = scores[-1] if scores else 0
+    if len(timestamps) >= 2:
+        t_span = timestamps[-1] - timestamps[0]
+        if t_span > 0:
+            drift_per_day = (scores[-1] - scores[0]) / (t_span / 86400)
+            projected_score = max(0, min(100, scores[-1] + drift_per_day * horizon_days))
+
+    current = scores[-1] if scores else 0
+    if abs(drift_per_day) < 0.1:
+        drift_label = f"{CYAN}— Stable{RESET}"
+    elif drift_per_day > 0:
+        drift_label = f"{GREEN}▲ +{drift_per_day:.1f}%/day{RESET}"
+    else:
+        drift_label = f"{RED}▼ {drift_per_day:.1f}%/day{RESET}"
+
+    proj_color = GREEN if projected_score >= 80 else YELLOW if projected_score >= 50 else RED
+    print(f"  {BOLD}Score trajectory:{RESET}  {current:.0f}% → {proj_color}{projected_score:.0f}%{RESET} in {horizon_days}d  ({drift_label})")
+
+    if projected_score < 80 and current >= 80:
+        days_to_drop = (current - 80) / abs(drift_per_day) if drift_per_day < -0.1 else 0
+        if days_to_drop > 0:
+            print(f"  {RED}⚠  Score will drop below 80% in ~{days_to_drop:.0f} days{RESET}")
+
+    # --- 2. Regression risk: checkpoints likely to fail again ---
+    print(f"\n{BOLD}Regression Risk{RESET} {DIM}— currently passing but historically unstable{RESET}")
+
+    cp_history: dict[str, list[str]] = defaultdict(list)
+    for event in history:
+        for cp_id, cp_data in event.get("checkpoints", {}).items():
+            cp_history[cp_id].append(cp_data["status"])
+
+    at_risk = []
+    for cp_id, statuses in cp_history.items():
+        if not statuses or statuses[-1] != "pass":
+            continue
+        flips = sum(1 for i in range(1, len(statuses)) if statuses[i] != statuses[i - 1])
+        fail_rate = sum(1 for s in statuses if s in ("fail", "expired_exception")) / len(statuses)
+        if flips >= 2 or fail_rate >= 0.3:
+            recent_fails = sum(1 for s in statuses[-5:] if s in ("fail", "expired_exception"))
+            risk_score = (flips * 0.4) + (fail_rate * 0.3) + (recent_fails * 0.3)
+            at_risk.append((cp_id, flips, fail_rate, risk_score))
+
+    at_risk.sort(key=lambda x: -x[3])
+    if at_risk:
+        for cp_id, flips, fail_rate, risk_score in at_risk[:8]:
+            risk_color = RED if risk_score >= 1.5 else YELLOW
+            risk_label = "HIGH" if risk_score >= 1.5 else "MEDIUM"
+            print(f"  {risk_color}⚡{RESET} {cp_id}  {DIM}{flips} flips, {fail_rate:.0%} failure rate{RESET}  [{risk_color}{risk_label}{RESET}]")
+    else:
+        print(f"  {GREEN}No at-risk checkpoints. All passing checks have stable history.{RESET}")
+
+    # --- 3. Stale green: always passing, may be too lenient ---
+    print(f"\n{BOLD}Stale Green{RESET} {DIM}— always passing, check may need tightening{RESET}")
+
+    stale = []
+    for cp_id, statuses in cp_history.items():
+        if len(statuses) >= 10 and all(s == "pass" for s in statuses):
+            stale.append((cp_id, len(statuses)))
+
+    stale.sort(key=lambda x: -x[1])
+    if stale:
+        for cp_id, count in stale[:5]:
+            print(f"  {DIM}✓{RESET} {cp_id}  {DIM}passed {count}/{count} scans — review if check is still meaningful{RESET}")
+    else:
+        print(f"  {DIM}No stale checks detected.{RESET}")
+
+    # --- 4. Chronic blockers: never passed, longest-running ---
+    print(f"\n{BOLD}Chronic Blockers{RESET} {DIM}— never passed, longest-running{RESET}")
+
+    chronic = []
+    for cp_id, statuses in cp_history.items():
+        if all(s in ("fail", "expired_exception") for s in statuses) and len(statuses) >= 2:
+            first_ts = None
+            for event in history:
+                if cp_id in event.get("checkpoints", {}):
+                    try:
+                        first_ts = datetime.datetime.fromisoformat(event["timestamp"])
+                    except ValueError:
+                        pass
+                    break
+            days_open = 0
+            if first_ts:
+                days_open = (datetime.datetime.now(tz=datetime.timezone.utc) - first_ts).days
+            chronic.append((cp_id, len(statuses), days_open))
+
+    chronic.sort(key=lambda x: -x[2])
+    if chronic:
+        for cp_id, scans, days in chronic[:5]:
+            age = f"{days}d" if days > 0 else "recent"
+            print(f"  {RED}✗{RESET} {cp_id}  {DIM}failed {scans} scans, open {age}{RESET}")
+    else:
+        print(f"  {GREEN}No chronic blockers.{RESET}")
+
+    # --- Summary line ---
+    print(f"\n{BOLD}Forecast:{RESET}  {current:.0f}% → {proj_color}{projected_score:.0f}%{RESET} by {(datetime.datetime.now() + datetime.timedelta(days=horizon_days)).strftime('%b %d')}", end="")
+    if at_risk:
+        print(f"  ·  {len(at_risk)} check{'s' if len(at_risk) != 1 else ''} at risk", end="")
+    if chronic:
+        print(f"  ·  {len(chronic)} chronic blocker{'s' if len(chronic) != 1 else ''}", end="")
+    print("\n")
+    return 0
+
+
 def _format_duration(seconds: float) -> str:
     if seconds < 60:
         return f"{seconds:.0f}s"
