@@ -32,6 +32,8 @@ Usage:
     ready trends                   Show readiness score trends from scan history
     ready trends --last 50         Show last 50 scans
     ready health                   Analyze checkpoint health — chronic failures, flapping, MTTR
+    ready dashboard                Generate self-contained HTML readiness dashboard
+    ready dashboard --open         Generate and open in browser
     ready aggregate PATHS...       Cross-repo heatmap (CLI)
     ready aggregate PATHS... --html  Generate self-contained HTML heatmap report
 """
@@ -1756,6 +1758,88 @@ def cmd_audit(args):
     return 1 if has_critical else 0
 
 
+def cmd_dashboard(args) -> int:
+    """Generate a self-contained HTML readiness dashboard."""
+    import webbrowser
+    from ready.analytics import load_history
+    from ready.formatters.dashboard import generate_dashboard
+
+    repo_root = find_repo_root()
+    readiness_dir = os.path.join(repo_root, READINESS_DIR)
+    definitions_path = os.path.join(readiness_dir, DEFINITIONS_FILE)
+    exceptions_path = os.path.join(readiness_dir, EXCEPTIONS_FILE)
+
+    auto_pack = None
+    if not os.path.isdir(readiness_dir):
+        auto_pack = _detect_pack(repo_root)
+        examples_dir = _find_examples_dir()
+        if not examples_dir:
+            print(f"{RED}✗ No {READINESS_DIR}/ found. Run 'ready init' first.{RESET}")
+            return 1
+        pack_dir_name = PACKS[auto_pack][0]
+        definitions_path = os.path.join(examples_dir, pack_dir_name, "checkpoint-definitions.json")
+
+    if not os.path.isfile(definitions_path):
+        print(f"{RED}✗ No {DEFINITIONS_FILE} found in {READINESS_DIR}/{RESET}")
+        return 1
+
+    config_path = os.path.join(readiness_dir, "config.json")
+    service_name = None
+    service_tags = None
+    if os.path.isfile(config_path):
+        with open(config_path) as f:
+            cfg = json.load(f)
+            service_name = cfg.get("service_name")
+            service_tags = cfg.get("service_tags")
+
+    result = run_scan(
+        definitions_path=definitions_path,
+        evidence_path=os.path.join(readiness_dir, EVIDENCE_FILE),
+        exceptions_path=exceptions_path,
+        repo_root=repo_root,
+        service_name=service_name,
+        service_tags=service_tags,
+    )
+
+    scan_dict = result.to_dict()
+    history = load_history(readiness_dir)
+
+    definitions_data = {}
+    if os.path.isfile(definitions_path):
+        with open(definitions_path) as f:
+            definitions_data = json.load(f)
+    exceptions_list: list[dict] = []
+    if os.path.isfile(exceptions_path):
+        try:
+            with open(exceptions_path) as f:
+                exceptions_list = json.load(f).get("exceptions", [])
+        except Exception:
+            pass
+
+    html = generate_dashboard(
+        scan_dict,
+        history,
+        service_name=result.service_name,
+        definitions=definitions_data,
+        exceptions=exceptions_list,
+    )
+
+    output_path = args.output
+    if not os.path.isabs(output_path):
+        output_path = os.path.join(repo_root, output_path)
+
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(html)
+
+    print(f"{GREEN}✓{RESET} Dashboard written to {output_path}")
+
+    if args.open:
+        webbrowser.open(f"file://{os.path.abspath(output_path)}")
+
+    return 0
+
+
 def cmd_aggregate(args):
     """Aggregate baselines from multiple repos."""
     if not args.paths:
@@ -2684,6 +2768,12 @@ def main():
     # health
     subparsers.add_parser("health", help="Analyze checkpoint health — chronic failures, flapping, MTTR")
 
+    # dashboard
+    dash_parser = subparsers.add_parser("dashboard", help="Generate self-contained HTML readiness dashboard")
+    dash_parser.add_argument("--output", "-o", default="readiness-dashboard.html", metavar="FILE",
+                             help="Output file (default: readiness-dashboard.html)")
+    dash_parser.add_argument("--open", action="store_true", help="Open in browser after generation")
+
     # aggregate
     agg_parser = subparsers.add_parser("aggregate", help="Cross-repo heatmap")
     agg_parser.add_argument("paths", nargs="*", help="Paths to baseline files")
@@ -2736,6 +2826,8 @@ def main():
     elif args.command == "health":
         from ready.analytics import cmd_health
         sys.exit(cmd_health(args))
+    elif args.command == "dashboard":
+        sys.exit(cmd_dashboard(args))
     else:
         parser.print_help()
         sys.exit(0)

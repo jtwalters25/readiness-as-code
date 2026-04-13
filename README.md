@@ -187,6 +187,7 @@ AFTER: pass — 0 false positives
 - **Closed-loop work item tracking.** Gaps become tracked work items (GitHub, Azure DevOps, Jira); ticket-closed-but-code-failing flags as **regression**, code-fixed-but-ticket-open as **stale**.
 - **Cross-repo aggregation.** `ready aggregate` turns multiple baselines into an HTML heatmap — *"telemetry gaps in 4 of 5 services"* is a platform problem, not a team problem.
 - **Expiring accepted risks.** Acknowledge a gap with a justification and expiry date; the scanner re-flags it when the expiry passes.
+- **HTML dashboard.** `ready dashboard` generates a self-contained HTML dashboard — score ring, sparkline trajectory, blocking gaps, flapping checks, MTTR leaderboard. One file, no dependencies, dark theme.
 - **Readiness audit.** `ready audit` reports the health of the readiness system itself — exception age, definition staleness, review_by coverage, score trend.
 - **Codebase-aware inference.** `ready infer` analyzes stack, frameworks, dependencies, ADRs, and auth patterns to propose tailored checkpoints you approve one at a time.
 - **AI-assisted authoring.** `ready author --from guidelines.md` generates a paste-ready prompt for any model (Claude, ChatGPT, Copilot, Cursor, Gemini).
@@ -233,6 +234,8 @@ ready items --create                   # Propose + create work items (human appr
 ready items --verify                   # Cross-check work items vs code
 
 # Cross-repo
+ready dashboard                        # Generate self-contained HTML readiness dashboard
+ready dashboard --open                 # Generate and open in browser
 ready aggregate PATHS...               # Cross-repo heatmap from multiple baselines
 ready aggregate PATHS... --html        # Generate self-contained HTML heatmap report
 ```

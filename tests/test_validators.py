@@ -1081,3 +1081,64 @@ class TestAnalytics:
         assert _format_duration(120) == "2m"
         assert _format_duration(7200) == "2.0h"
         assert _format_duration(172800) == "2.0d"
+
+
+class TestDashboard:
+    """Tests for HTML dashboard generation."""
+
+    def test_generate_dashboard_basic(self):
+        from ready.formatters.dashboard import generate_dashboard
+
+        scan_result = {
+            "summary": {
+                "total": 10, "passing": 7, "failing_red": 2,
+                "failing_yellow": 1, "exceptions": 0, "skipped": 0,
+                "readiness_pct": 70.0,
+            },
+            "results": [
+                {"checkpoint_id": "cp-1", "title": "Check One", "status": "pass",
+                 "severity": "red", "guideline_section": "Security"},
+                {"checkpoint_id": "cp-2", "title": "Check Two", "status": "fail",
+                 "severity": "red", "fix_hint": "Fix it", "guideline_section": "Security",
+                 "evidence": ["src/bad.py:10"]},
+            ],
+        }
+        html = generate_dashboard(scan_result, [], service_name="test-svc")
+        assert "<!DOCTYPE html>" in html
+        assert "test-svc" in html
+        assert "70%" in html
+        assert "BLOCKING" in html
+        assert "Fix it" in html
+
+    def test_generate_dashboard_with_history(self):
+        from ready.formatters.dashboard import generate_dashboard
+
+        history = [
+            {"readiness_pct": 50, "checkpoints": {"cp-1": {"status": "fail", "severity": "red"}}},
+            {"readiness_pct": 60, "checkpoints": {"cp-1": {"status": "pass", "severity": "red"}}},
+            {"readiness_pct": 55, "checkpoints": {"cp-1": {"status": "fail", "severity": "red"}}},
+            {"readiness_pct": 70, "checkpoints": {"cp-1": {"status": "pass", "severity": "red"}}},
+        ]
+        scan_result = {
+            "summary": {"total": 5, "passing": 4, "failing_red": 1,
+                        "failing_yellow": 0, "exceptions": 0, "skipped": 0,
+                        "readiness_pct": 80.0},
+            "results": [],
+        }
+        html = generate_dashboard(scan_result, history, service_name="my-svc")
+        assert "<svg" in html
+        assert "▲" in html
+
+    def test_generate_dashboard_100_pct(self):
+        from ready.formatters.dashboard import generate_dashboard
+
+        scan_result = {
+            "summary": {"total": 5, "passing": 5, "failing_red": 0,
+                        "failing_yellow": 0, "exceptions": 0, "skipped": 0,
+                        "readiness_pct": 100.0},
+            "results": [{"checkpoint_id": "cp-1", "title": "OK", "status": "pass",
+                         "severity": "red", "guideline_section": "Ops"}],
+        }
+        html = generate_dashboard(scan_result, [], service_name="perfect-svc")
+        assert "Ready" in html
+        assert "Ship it" in html
