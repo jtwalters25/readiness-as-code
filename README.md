@@ -236,10 +236,19 @@ ready audit                            # Audit exception health, definition stal
 # Work items
 ready items --create                   # Propose + create work items (human approves each)
 ready items --verify                   # Cross-check work items vs code
+ready items --verify --auto-reopen     # Reopen closed items for regressions
+ready items --verify --dry-run         # Preview without API calls
+
+# Analytics & observability
+ready trends                           # Score timeline from scan history
+ready trends --last 50                 # Show last 50 scans
+ready health                           # Chronic failures, flapping, MTTR analysis
+ready dashboard                        # Self-contained HTML readiness dashboard
+ready dashboard --open                 # Generate and open in browser
+ready watch                            # Watch for changes and re-scan continuously
+ready watch --interval 5               # Custom poll interval (seconds)
 
 # Cross-repo
-ready dashboard                        # Generate self-contained HTML readiness dashboard
-ready dashboard --open                 # Generate and open in browser
 ready aggregate PATHS...               # Cross-repo heatmap from multiple baselines
 ready aggregate PATHS... --html        # Generate self-contained HTML heatmap report
 ```
@@ -261,15 +270,19 @@ jobs:
       - uses: jtwalters25/readiness-as-code@v0.7.1
 ```
 
+On pull requests, the action automatically posts a **PR comment** with the readiness score, blocking count, and pass/fail status — updated on each push.
+
 With options:
 
 ```yaml
       - uses: jtwalters25/readiness-as-code@v0.7.1
         with:
-          pack: web-service           # auto-init with a checkpoint pack
+          pack: web-api               # auto-init with a checkpoint pack
           fail-on-red: "true"         # fail the build on blocking gaps
           baseline: .readiness/baseline.json
           markdown: .readiness/gaps.md
+          fix-context: .readiness/fix-context.md   # AI remediation context artifact
+          dashboard: .readiness/dashboard.html     # HTML dashboard artifact
 ```
 
 Outputs are available for downstream steps:
@@ -279,6 +292,24 @@ Outputs are available for downstream steps:
         id: ready
       - run: echo "Readiness: ${{ steps.ready.outputs.readiness-pct }}%"
 ```
+
+| Input | Description | Default |
+|-------|-------------|---------|
+| `pack` | Checkpoint pack to auto-init with | |
+| `fail-on-red` | Fail the build on blocking gaps | `"true"` |
+| `baseline` | Write baseline snapshot for drift tracking | |
+| `markdown` | Write markdown gaps checklist | |
+| `fix-context` | Generate AI remediation context (pipe to Claude/Copilot) | |
+| `dashboard` | Generate self-contained HTML dashboard | |
+| `args` | Additional `ready scan` arguments | |
+
+| Output | Description |
+|--------|-------------|
+| `readiness-pct` | Readiness percentage (0-100) |
+| `failing-red` | Number of blocking failures |
+| `failing-yellow` | Number of warnings |
+| `passing` | Number of passing checks |
+| `is-ready` | `true` if no blocking failures |
 
 ## AI Integration
 
