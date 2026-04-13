@@ -13,7 +13,10 @@ one new plugin file; this engine does not change.
 import json
 import logging
 import os
+import subprocess
 import sys
+import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from enum import Enum
@@ -60,6 +63,7 @@ class CheckResult:
     doc_link: str = ""
     guideline: str = ""
     guideline_section: str = ""
+    duration_ms: int = 0  # per-checkpoint wall time
 
     def to_dict(self) -> dict:
         return {
@@ -70,6 +74,8 @@ class CheckResult:
             "type": self.check_type.value,
             "confidence": self.confidence.value,
             "evidence": self.evidence,
+            "evidence_count": len(self.evidence),
+            "duration_ms": self.duration_ms,
             "message": self.message,
             "fix_hint": self.fix_hint,
             "doc_link": self.doc_link,
@@ -90,9 +96,26 @@ class ScanResult:
     skipped: int
     readiness_pct: float
     results: list[CheckResult]
+    # --- new fields (Phase 1 schema) — all have defaults for backward compat ---
+    scan_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    duration_ms: int = 0
+    trigger: str = "local"
+    repo: str = ""
+    branch: str = ""
+    commit_sha: str = ""
 
     def to_dict(self) -> dict:
         return {
+            # ── Identity (new) ────────────────────────────────────────────────
+            "scan_id": self.scan_id,
+            "timestamp": self.scan_time,
+            "repo": self.repo,
+            "branch": self.branch,
+            "commit_sha": self.commit_sha,
+            "trigger": self.trigger,
+            "duration_ms": self.duration_ms,
+            "readiness_pct": self.readiness_pct,
+            # ── Legacy keys — kept for backward compatibility ─────────────────
             "service_name": self.service_name,
             "scan_time": self.scan_time,
             "summary": {
@@ -104,7 +127,26 @@ class ScanResult:
                 "skipped": self.skipped,
                 "readiness_pct": self.readiness_pct,
             },
+            # ── Normalized totals (new) ────────────────────────────────────────
+            "totals": {
+                "total": self.total,
+                "passing": self.passing,
+                "failing": self.failing_red + self.failing_yellow,
+                "p0": self.failing_red,
+            },
+            # ── Full checkpoint detail (legacy) ───────────────────────────────
             "results": [r.to_dict() for r in self.results],
+            # ── Lightweight per-checkpoint summary (new) ──────────────────────
+            "checkpoint_results": [
+                {
+                    "checkpoint_id": r.checkpoint_id,
+                    "status": r.status.value,
+                    "severity": r.severity.value,
+                    "evidence_count": len(r.evidence),
+                    "duration_ms": r.duration_ms,
+                }
+                for r in self.results
+            ],
         }
 
     @property
@@ -385,6 +427,63 @@ def resolve_definitions(
     return resolved
 
 
+def _git_metadata(repo_root: str) -> tuple[str, str, str]:
+    """Return (repo_slug, branch, commit_sha) from git — best-effort, never raises."""
+
+    def _git(*args: str) -> str:
+        try:
+            r = subprocess.run(
+                ["git", *args],
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            return r.stdout.strip() if r.returncode == 0 else ""
+        except Exception:
+            return ""
+
+    # repo: prefer remote origin URL → final path component; fall back to dir name
+    remote_url = _git("remote", "get-url", "origin")
+    if remote_url:
+        repo_slug = remote_url.rstrip("/").rstrip(".git").rsplit("/", 1)[-1]
+    else:
+        repo_slug = os.path.basename(os.path.abspath(repo_root))
+
+    # branch: check well-known CI env vars first, then git
+    branch = (
+        os.environ.get("GITHUB_HEAD_REF")                                          # GHA PR
+        or os.environ.get("GITHUB_REF_NAME")                                       # GHA push
+        or os.environ.get("BUILD_SOURCEBRANCH", "").replace("refs/heads/", "")    # ADO
+        or os.environ.get("CI_COMMIT_REF_NAME")                                    # GitLab
+        or _git("rev-parse", "--abbrev-ref", "HEAD")
+    )
+
+    # commit: check well-known CI env vars first, then git
+    commit_sha = (
+        os.environ.get("GITHUB_SHA")              # GHA
+        or os.environ.get("BUILD_SOURCEVERSION")  # ADO
+        or os.environ.get("CI_COMMIT_SHA")        # GitLab
+        or _git("rev-parse", "--short", "HEAD")
+    )
+
+    return repo_slug, branch, commit_sha
+
+
+def _detect_trigger() -> str:
+    """Return 'ci' if a well-known CI environment variable is set, else 'local'."""
+    ci_vars = (
+        "CI",
+        "GITHUB_ACTIONS",
+        "SYSTEM_TEAMFOUNDATIONCOLLECTIONURI",  # Azure DevOps
+        "GITLAB_CI",
+        "JENKINS_URL",
+        "CIRCLECI",
+        "TRAVIS",
+    )
+    return "ci" if any(os.environ.get(v) for v in ci_vars) else "local"
+
+
 def run_scan(
     repo_root: str,
     definitions_path: str,
@@ -394,8 +493,13 @@ def run_scan(
     service_name: str | None = None,
     on_progress: "callable | None" = None,
     definitions: dict | None = None,
+    trigger: str | None = None,
 ) -> ScanResult:
     """Run a full scan against a repo and return structured results."""
+
+    scan_start = time.monotonic()
+    scan_id = str(uuid.uuid4())
+    trigger = trigger or _detect_trigger()
 
     if definitions is None:
         with open(definitions_path, "r", encoding="utf-8") as f:
@@ -414,15 +518,19 @@ def run_scan(
     if not service_name:
         service_name = os.path.basename(os.path.abspath(repo_root))
 
+    repo, branch, commit_sha = _git_metadata(repo_root)
+
     results: list[CheckResult] = []
     checkpoints = definitions.get("checkpoints", [])
     total = len(checkpoints)
     for i, checkpoint in enumerate(checkpoints, 1):
         if on_progress:
             on_progress(i, total, checkpoint.get("title", checkpoint.get("id", "")))
+        cp_start = time.monotonic()
         result = evaluate_checkpoint(
             checkpoint, repo_root, evidence_registry, exceptions_data, service_tags
         )
+        result.duration_ms = round((time.monotonic() - cp_start) * 1000)
         results.append(result)
 
     passing = sum(1 for r in results if r.status == Status.PASS)
@@ -446,6 +554,8 @@ def run_scan(
         (passing / evaluated * 100) if evaluated > 0 else 0, 1
     )
 
+    duration_ms = round((time.monotonic() - scan_start) * 1000)
+
     return ScanResult(
         service_name=service_name,
         scan_time=datetime.now(tz=timezone.utc).isoformat(),
@@ -457,4 +567,10 @@ def run_scan(
         skipped=skipped,
         readiness_pct=readiness_pct,
         results=results,
+        scan_id=scan_id,
+        duration_ms=duration_ms,
+        trigger=trigger,
+        repo=repo,
+        branch=branch,
+        commit_sha=commit_sha,
     )
