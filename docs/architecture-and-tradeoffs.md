@@ -128,10 +128,14 @@ When multiple services use the same checkpoint definitions, their baselines can 
 
 Built-in packs replace the blank-slate onboarding problem. Instead of `ready init` scaffolding an empty or minimal `checkpoint-definitions.json`, teams choose from:
 
-- **starter** — 11 universal checks (docs, CI, testing, secrets, ops basics)
+- **starter** — 12 universal checks (docs, CI, testing, secrets, ops basics)
 - **web-api** — 17 API-specific checks (auth, rate limiting, error handling, logging, resilience)
-- **security-baseline** — 8 security checks (hardcoded secrets, private keys, .env files, lock file, SECURITY.md)
+- **security-baseline** — 9 security checks (hardcoded secrets, private keys, .env files, lock file, SECURITY.md)
 - **telemetry** — 8 telemetry checks (logging, tracing, metrics, dashboards, on-call)
+- **engineering-review** — 27 checks for a full pre-launch engineering review (architecture, security, testing, AI/RAI)
+- **operational-review** — 14 checks for operational readiness (SLOs, on-call, data, capacity)
+- **governance** — 16 checks for SDLC gates and external review attestations
+- **service-migration** — 9 checks for service identity migration, auth provisioning, and cutover
 
 **Why:** A thin starter pack means every team builds their checkpoint library from scratch. Curated packs give teams a working baseline in seconds, with the right checks for their context. The first scan produces a meaningful score rather than a placeholder.
 

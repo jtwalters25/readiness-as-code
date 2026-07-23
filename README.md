@@ -84,6 +84,8 @@ ready? — your-service   80%   1 blocking · 2 warnings
 
 **No config. No accounts. No init required.** `ready scan` auto-detects your project type and runs immediately. When you're ready to customize, run `ready init`.
 
+> **Exit codes:** `ready scan` exits non-zero when there are blocking (red) gaps — that's what lets it gate a PR. Your first run on an unprepared repo is *expected* to exit `1`; it's a finding, not an error. Use `ready scan --calibrate` to report without failing.
+
 When everything is passing:
 
 ```
@@ -127,13 +129,13 @@ ready init --list-packs                      # Show all available packs
 
 | Pack | Checks | Best for |
 |------|--------|----------|
-| `starter` | 11 | Any repo |
+| `starter` | 12 | Any repo |
 | `web-api` | 17 | REST/HTTP services |
-| `security-baseline` | 8 | Any repo with sensitive data |
+| `security-baseline` | 9 | Any repo with sensitive data |
 | `telemetry` | 8 | Production services |
-| `engineering-review` | 26 | Pre-launch engineering review |
+| `engineering-review` | 27 | Pre-launch engineering review |
 | `operational-review` | 14 | Pre-launch operational review |
-| `governance` | 15 | SDLC compliance + sign-off tracking |
+| `governance` | 16 | SDLC compliance + sign-off tracking |
 | `service-migration` | 9 | Service identity migration + cutover |
 
 ## Proven in Production

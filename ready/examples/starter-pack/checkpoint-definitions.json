@@ -58,7 +58,7 @@
         "min_matches": 1
       },
       "applicable_tags": [],
-      "fix_hint": "Add a CI pipeline. See templates/ in the ready repo for GitHub Actions, Azure Pipelines, and GitLab CI examples."
+      "fix_hint": "Add a CI pipeline. Ready ships GitHub Actions, Azure Pipelines, and GitLab CI templates: https://github.com/jtwalters25/readiness-as-code/tree/main/templates"
     },
 
     {

@@ -14,6 +14,8 @@ Every checkpoint has one of three types, depending on where the evidence lives.
 |--------|----------|---------|
 | `file_exists` | A specific file should be present | README.md, Dockerfile |
 | `glob` | Files matching a pattern should exist | `tests/**/*.py` with min_matches |
+| `glob_all` | Every pattern in a list should match at least one file | `patterns: ["Dockerfile", "docker-compose.yml"]` |
+| `file_count` | At least N files should match (alias of `glob`) | `tests/**/*.py` with `min_matches: 3` |
 | `grep` | Source code should contain a pattern | Auth middleware, health endpoints |
 | `grep` (min_matches: 0) | Source code should NOT contain a pattern | Hardcoded secrets, banned imports |
 | `json_path` | A config value should be set | `$.logging.level` = `"info"` |
