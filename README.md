@@ -32,6 +32,10 @@
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License" />
 </p>
 
+<p align="center">
+  <sub><em>That badge is <code>ready</code> scanning itself — by design. A readiness tool that can't pass its own checks isn't ready. Click it for the committed baseline.</em></sub>
+</p>
+
 ---
 
 ## Connect with Jeremiah Walters
