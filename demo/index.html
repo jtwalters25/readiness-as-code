@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Run the real readiness-as-code CLI in your browser on a sample repo. Edit the code, rescan, watch the score change." />
+    <title>ready: live demo</title>
+    <style>
+      :root {
+        --bg: #f7f7f5; --surface: #ffffff; --ink: #1c1c1a; --soft: #5a5a55; --line: #dddcd6;
+        --term: #16161a; --term-ink: #e6e6e3; --accent: #1f7a3f;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #121211; --surface: #1c1c1a; --ink: #eeede8; --soft: #b0afa8; --line: #34332f; --accent: #4cc27a; }
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+      main { max-width: 900px; margin: 0 auto; padding: 32px 16px 56px; }
+      h1 { margin: 0 0 8px; font-size: 30px; line-height: 1.2; }
+      .lede { margin: 0; color: var(--soft); max-width: 62ch; }
+      .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+      section { margin-top: 28px; }
+      h2 { font-size: 15px; margin: 0 0 10px; color: var(--soft); font-weight: 600; }
+      button { font: inherit; min-height: 44px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+      button[aria-pressed="true"] { border: 2px solid var(--accent); font-weight: 600; }
+      button.run { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+      button:disabled { opacity: 0.6; cursor: wait; }
+      :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .tabs button { font-family: var(--mono); font-size: 13px; min-height: 36px; padding: 6px 10px; }
+      textarea { width: 100%; min-height: 300px; margin-top: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 13px/1.5 var(--mono); tab-size: 4; resize: vertical; }
+      .hint { color: var(--soft); font-size: 14px; margin: 8px 0 0; }
+      #status { color: var(--soft); font-size: 14px; }
+      pre#out { margin: 12px 0 0; min-height: 120px; padding: 14px; border-radius: 8px; background: var(--term); color: var(--term-ink); font: 13px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+      .b { font-weight: 700; } .d { opacity: 0.6; } .r { color: #ff6b6b; } .g { color: #5fd38d; } .y { color: #f2c84b; } .c { color: #6fd3e8; }
+      footer { margin-top: 36px; color: var(--soft); font-size: 14px; }
+      footer a { color: inherit; }
+      code { font-family: var(--mono); font-size: 0.92em; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>ready, live in your browser</h1>
+      <p class="lede">
+        This page runs the real <code>readiness-as-code</code> CLI from PyPI, compiled to WebAssembly with Pyodide. Pick a sample repo, edit any file, and rescan. Nothing leaves your browser.
+      </p>
+
+      <section aria-labelledby="sample-h">
+        <h2 id="sample-h">Sample repo</h2>
+        <div class="row" id="samples" role="group" aria-label="Sample repo"></div>
+      </section>
+
+      <section aria-labelledby="files-h">
+        <h2 id="files-h">Files</h2>
+        <div class="row tabs" id="tabs" role="group" aria-label="Files"></div>
+        <label class="sr" for="editor" hidden>File contents</label>
+        <textarea id="editor" spellcheck="false" aria-label="File contents"></textarea>
+        <p class="hint" id="hint"></p>
+      </section>
+
+      <section aria-labelledby="out-h">
+        <div class="row">
+          <button class="run" id="run">Run ready scan</button>
+          <span id="status" role="status">Loading Python (a few seconds the first time)…</span>
+        </div>
+        <h2 id="out-h" hidden>Scan output</h2>
+        <pre id="out" aria-live="polite"></pre>
+      </section>
+
+      <footer>
+        Install it for real with <code>pip install readiness-as-code</code>, then run <code>ready scan</code> in any repo.
+        <a href="https://github.com/jtwalters25/readiness-as-code">Source on GitHub</a>.
+      </footer>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.27.2/full/pyodide.js"></script>
+    <script>
+      const SAMPLES = {
+ "weekend": {
+  "label": "Weekend API",
+  "files": {
+   "app/main.py": "from flask import Flask\nimport requests\n\napp = Flask(__name__)\nAPI_KEY = \"hardcoded-demo-key-do-not-ship\"\n\n@app.route(\"/orders\")\ndef orders():\n    return requests.get(\"https://payments.example.com/orders\", headers={\"Authorization\": API_KEY}).text\n",
+   "requirements.txt": "flask\nrequests\n"
+  }
+ },
+ "ready": {
+  "label": "Ready to ship",
+  "files": {
+   "app/main.py": "import signal\nimport structlog\nfrom flask import Flask, jsonify, request\nfrom opentelemetry.instrumentation.flask import FlaskInstrumentor\nfrom pydantic import BaseModel\nfrom flask_limiter import Limiter\nfrom tenacity import retry, stop_after_attempt, wait_exponential_jitter\nimport requests\n\nfrom app.auth import auth_middleware\n\nlog = structlog.get_logger()\napp = Flask(__name__)\nFlaskInstrumentor().instrument_app(app)\nlimiter = Limiter(app, default_limits=[\"100/minute\"])  # rate limit per client\napp.before_request(auth_middleware)\n\n\nclass Order(BaseModel):\n    sku: str\n    quantity: int\n\n\n@app.get(\"/health\")\ndef health():\n    return {\"status\": \"ok\"}\n\n\n@app.errorhandler(Exception)\ndef error_handler(err):\n    log.error(\"unhandled\", error=str(err), request_id=request.headers.get(\"x-request-id\"))\n    return jsonify(error=\"internal_error\"), 500\n\n\n@retry(stop=stop_after_attempt(4), wait=wait_exponential_jitter(initial=0.5, max=8))\ndef fetch_orders():\n    return requests.get(\"https://payments.example.com/orders\", timeout=3).json()\n\n\n@app.post(\"/orders\")\ndef create_order():\n    order = Order.model_validate(request.get_json())\n    log.info(\"order.created\", sku=order.sku)\n    return jsonify(fetch_orders())\n\n\ndef graceful_shutdown(signum, frame):\n    log.info(\"shutdown\", signal=\"SIGTERM\")\n\n\nsignal.signal(signal.SIGTERM, graceful_shutdown)\n",
+   "app/auth.py": "import os\nfrom flask import abort, request\n\n\ndef auth_middleware():\n    \"\"\"Validate the bearer token on every request except /health.\"\"\"\n    if request.path == \"/health\":\n        return\n    if request.headers.get(\"Authorization\") != f\"Bearer {os.environ['API_TOKEN']}\":\n        abort(401)\n",
+   "Dockerfile": "FROM python:3.12-slim\nWORKDIR /srv\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\nCOPY app app\nCMD [\"gunicorn\", \"--graceful-timeout\", \"20\", \"app.main:app\"]\n",
+   "openapi.yaml": "openapi: 3.0.3\ninfo: { title: Orders API, version: \"1.0\" }\npaths:\n  /health: { get: { responses: { \"200\": { description: OK } } } }\n  /orders: { post: { responses: { \"200\": { description: Created } } } }\n",
+   "requirements.txt": "flask\nflask-limiter\npydantic\nstructlog\ntenacity\nrequests\ngunicorn\nopentelemetry-instrumentation-flask\n",
+   ".readiness/external-evidence.json": "{\n  \"version\": \"1.0\",\n  \"attestations\": [\n    { \"attestation_key\": \"monitoring_dashboard\", \"attested_by\": \"sre@example.com\", \"attested_date\": \"2026-11-01\", \"expires\": \"2027-05-01\", \"evidence_link\": \"https://grafana.example.com/d/orders\" },\n    { \"attestation_key\": \"alerting_configured\", \"attested_by\": \"sre@example.com\", \"attested_date\": \"2026-11-01\", \"expires\": \"2027-05-01\", \"evidence_link\": \"https://alerts.example.com/orders\" },\n    { \"attestation_key\": \"oncall_registration\", \"attested_by\": \"sre@example.com\", \"attested_date\": \"2026-11-01\", \"expires\": \"2027-05-01\", \"evidence_link\": \"https://oncall.example.com/orders\" },\n    { \"attestation_key\": \"runbook\", \"attested_by\": \"sre@example.com\", \"attested_date\": \"2026-11-01\", \"expires\": \"2027-05-01\", \"evidence_link\": \"https://wiki.example.com/orders/runbook\" },\n    { \"attestation_key\": \"observability_backend\", \"attested_by\": \"sre@example.com\", \"attested_date\": \"2026-11-01\", \"expires\": \"2027-05-01\", \"evidence_link\": \"https://otel.example.com/orders\" }\n  ]\n}\n"
+  },
+  "pack": "web-api"
+ }
+};
+      const HINTS = {
+        weekend: "Try it: add a route for \"/health\" to app/main.py, then rescan and watch a blocking gap clear.",
+        ready: "Try it: delete the Dockerfile's contents or the /health route, then rescan. The score drops.",
+      };
+      const state = { sample: "weekend", file: null, files: {} };
+      const $ = (id) => document.getElementById(id);
+
+      function pick(sample) {
+        state.sample = sample;
+        state.files = structuredClone(SAMPLES[sample].files);
+        state.file = Object.keys(state.files)[0];
+        render();
+        $("out").textContent = "";
+      }
+
+      function render() {
+        $("samples").replaceChildren(...Object.entries(SAMPLES).map(([id, s]) => {
+          const b = document.createElement("button");
+          b.textContent = s.label;
+          b.setAttribute("aria-pressed", String(id === state.sample));
+          b.onclick = () => pick(id);
+          return b;
+        }));
+        $("tabs").replaceChildren(...Object.keys(state.files).map((name) => {
+          const b = document.createElement("button");
+          b.textContent = name;
+          b.setAttribute("aria-pressed", String(name === state.file));
+          b.onclick = () => { state.file = name; render(); };
+          return b;
+        }));
+        $("editor").value = state.files[state.file];
+        $("hint").textContent = HINTS[state.sample];
+      }
+
+      $("editor").addEventListener("input", (e) => { state.files[state.file] = e.target.value; });
+
+      // ANSI colors from the CLI to safe HTML.
+      const CLS = { 1: "b", 2: "d", 91: "r", 92: "g", 93: "y", 96: "c" };
+      function ansiToHtml(text) {
+        const esc = (s) => s.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[ch]);
+        let html = "", open = 0;
+        for (const [i, part] of text.split(/\x1b\[([0-9;]*)m/).entries()) {
+          if (i % 2 === 0) { html += esc(part); continue; }
+          for (const code of part.split(";")) {
+            if (code === "0" || code === "") { html += "</span>".repeat(open); open = 0; }
+            else if (CLS[code]) { html += `<span class="${CLS[code]}">`; open++; }
+          }
+        }
+        return html + "</span>".repeat(open);
+      }
+
+      let pyodide = null;
+      const ready = (async () => {
+        pyodide = await loadPyodide();
+        const meta = await (await fetch("https://pypi.org/pypi/readiness-as-code/json")).json();
+        const wheel = meta.urls.find((u) => u.packagetype === "bdist_wheel");
+        pyodide.unpackArchive(new Uint8Array(await (await fetch(wheel.url)).arrayBuffer()), "wheel");
+        $("status").textContent = `ready ${meta.info.version} loaded.`;
+      })();
+
+      async function run() {
+        $("run").disabled = true;
+        $("status").textContent = "Scanning…";
+        try {
+          await ready;
+          let out = "";
+          pyodide.setStdout({ batched: (s) => (out += s + "\n") });
+          pyodide.setStderr({ batched: (s) => (out += s + "\n") });
+          pyodide.globals.set("FILES", pyodide.toPy(state.files));
+          pyodide.globals.set("PACK", SAMPLES[state.sample].pack ?? null);
+          await pyodide.runPythonAsync(`
+import os, sys, shutil, ready
+shutil.rmtree("/repo", ignore_errors=True)
+for path, text in FILES.items():
+    full = os.path.join("/repo", path)
+    os.makedirs(os.path.dirname(full), exist_ok=True)
+    with open(full, "w") as f:
+        f.write(text)
+if PACK:
+    # What 'ready init' would have written for this project type.
+    shutil.copy(os.path.join(os.path.dirname(ready.__file__), "examples", PACK, "checkpoint-definitions.json"),
+                "/repo/.readiness/checkpoint-definitions.json")
+os.chdir("/repo")
+sys.argv = ["ready", "scan"]
+from ready.ready import main
+try:
+    main()
+except SystemExit:
+    pass
+`);
+          const clean = out.split("\n").map((l) => l.split("\r").pop()).filter((l) => !/Scanning \d+\/\d+/.test(l)).join("\n").trim();
+          $("out").innerHTML = ansiToHtml(clean);
+          $("status").textContent = "Done. Edit a file and run it again.";
+        } catch (e) {
+          $("out").textContent = String(e);
+          $("status").textContent = "Couldn't run the scan. Check your connection and reload.";
+        } finally {
+          $("run").disabled = false;
+        }
+      }
+      $("run").onclick = run;
+      pick("weekend");
+    </script>
+  </body>
+</html>
