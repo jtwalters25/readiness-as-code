@@ -27,13 +27,13 @@
 
 <p align="center">
   <a href=".readiness/review-baseline.json">
-    <img src="https://img.shields.io/badge/ready-100%25-brightgreen" alt="ready: 100%" />
+    <img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjtwalters25%2Freadiness-as-code%2Fmain%2F.readiness%2Fbadge.json" alt="ready self-scan score" />
   </a>
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License" />
 </p>
 
 <p align="center">
-  <sub><em>That badge is <code>ready</code> scanning itself — by design. A readiness tool that can't pass its own checks isn't ready. Click it for the committed baseline.</em></sub>
+  <sub><em>That badge is <code>ready</code> scanning itself, refreshed by CI on every change to main. A readiness tool that can't pass its own checks isn't ready. Click it for the committed baseline.</em></sub>
 </p>
 
 ---

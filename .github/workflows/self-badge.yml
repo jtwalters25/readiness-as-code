@@ -1,0 +1,46 @@
+name: Self-scan badge
+
+# Keeps the README's "ready" badge honest: rescans this repo with ready itself
+# and writes the score to .readiness/badge.json (a shields.io endpoint).
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - '.readiness/badge.json'
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  badge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -e .
+      - name: Scan and write badge
+        run: |
+          python -m ready scan --calibrate --json > scan.json
+          python - <<'PY'
+          import json
+          pct = round(json.load(open("scan.json"))["readiness_pct"])
+          color = "brightgreen" if pct == 100 else "yellow" if pct >= 80 else "red"
+          badge = {"schemaVersion": 1, "label": "ready", "message": f"{pct}%", "color": color}
+          open(".readiness/badge.json", "w").write(json.dumps(badge) + "\n")
+          PY
+      - name: Commit if changed
+        run: |
+          if git diff --quiet .readiness/badge.json; then echo "No change"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .readiness/badge.json
+          git commit -m "Update self-scan badge"
+          git push
