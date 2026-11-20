@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "pack": "azure-operational-review",
+  "pack": "operational-review",
   "description": "Operational review checks for cloud-hosted services. Covers service health, deployment, on-call readiness, data management, and capacity planning.",
   "checkpoints": [
 
@@ -159,7 +159,7 @@
     {
       "id": "ops-oncall-04",
       "title": "Safe production access interfaces documented",
-      "description": "How engineers safely access and modify production (safe touch interfaces) must be documented.",
+      "description": "How engineers safely access and modify production must be documented.",
       "guideline": "Operational Review",
       "guideline_section": "DRI & On-Call",
       "severity": "yellow",

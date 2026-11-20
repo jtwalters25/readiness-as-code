@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "pack": "azure-governance",
+  "pack": "governance",
   "description": "Governance and SDLC compliance checks. Covers service classification, SDLC gates, and external attestations for monitoring, security, incident management, and review sign-offs.",
   "checkpoints": [
 

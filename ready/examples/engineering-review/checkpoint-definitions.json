@@ -121,8 +121,8 @@
 
     {
       "id": "eng-sec-06",
-      "title": "SDL gates enabled in CI pipeline",
-      "description": "Security Development Lifecycle gates (credential scanning, dependency scanning, SAST) must run in CI.",
+      "title": "Security scanning gates enabled in CI pipeline",
+      "description": "Security scanning gates (credential scanning, dependency scanning, SAST) must run in CI.",
       "guideline": "Engineering Review",
       "guideline_section": "Security & Privacy",
       "severity": "red",

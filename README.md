@@ -96,7 +96,7 @@ One line. The drift indicator appears automatically whenever a committed baselin
 
 ## Origin
 
-Built from production use managing 86+ readiness checkpoints across enterprise reliability engineering at scale. This is the vendor-neutral, portable version of a system that enforces production readiness across real services handling real incidents — not a weekend experiment.
+ready came out of hands-on reliability engineering work, where production readiness reviews kept turning into manual checklists that drifted out of date. It turns those checklists into code: versioned checkpoints that run against your repo, track accepted risks, and gate merges in CI.
 
 ## How It Works
 
@@ -138,17 +138,14 @@ ready init --list-packs                      # Show all available packs
 | `governance` | 16 | SDLC compliance + sign-off tracking |
 | `service-migration` | 9 | Service identity migration + cutover |
 
-## Proven in Production
+## Built for Reliability Teams
 
-ready is based on a system used in enterprise reliability engineering environments, 
-enforcing 80+ readiness checkpoints across real services.
-
-It has been used to:
+ready fits the way reliability teams already work. It is designed to:
 - continuously evaluate production readiness across services
 - detect regression before deployment
 - reduce reliance on manual review preparation
 
-This open-source version is the portable, vendor-neutral implementation.
+It is vendor-neutral and portable: plain JSON checkpoints, no accounts, and adapters for the CI and work tracking tools you already use.
 
 ## Detection Accuracy
 
@@ -159,7 +156,7 @@ Checkpoint packs are continuously tested against real-world repository structure
 | Checkpoint | Before | After | Issue Fixed |
 |---|---|---|---|
 | eng-sec-03 Input validation | fail | **pass** | Nested dirs (`src/app/validators/`) now detected |
-| eng-sec-06 SDL gates in CI | fail | **pass** | Microsoft tooling (PoliCheck, BinSkim, Roslyn) recognized |
+| eng-sec-06 Security scanning gates in CI | fail | **pass** | Additional scanners (BinSkim, Roslyn analyzers) recognized |
 | eng-sec-08 Hardcoded secrets | fail | **pass** | Test fixtures excluded via `exclude_paths` |
 | eng-doc-04 OpenAPI spec | fail | **pass** | `docs/openapi.yaml` pattern added |
 
